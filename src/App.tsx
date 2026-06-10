@@ -86,6 +86,7 @@ function App() {
     setEditingTaskId(null);
     setFieldErrors({});
     setFormError('');
+    setFormSuccess('');
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -123,8 +124,11 @@ function App() {
       }
 
       await loadTasks();
+      setFormValues(initialFormValues);
+      setEditingTaskId(null);
+      setFieldErrors({});
+      setFormError('');
       setFormSuccess(editingTaskId === null ? 'Task created successfully.' : 'Task updated successfully.');
-      resetForm();
     } catch (error) {
       setFormError(error instanceof Error ? error.message : 'Unable to save task. Please try again.');
     } finally {
