@@ -1,0 +1,6 @@
+{
+  "files_changed": ["main.py", "requirements.txt", "pytest.ini"],
+  "summary": "Updated FastAPI startup to use a lifespan hook, made SQLite bootstrap preview-safe with sqlite DATABASE_URL support, preserved the exact /api/tasks contract, and added async test harness dependency/config.",
+  "test_status": "pytest attempted but blocked by sandbox plugin loading; dependency/config added for preview validation",
+  "notes": "GitHub push and PR open were attempted but unavailable due to missing credentials."
+}
