@@ -20,9 +20,9 @@ from fastapi import Depends, FastAPI, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
-from backend.app.database import get_db, init_db
-from backend.app.models.task import TaskORM
-from backend.app.schemas.task import TaskCreate, TaskRead, TaskUpdate
+from app.database import get_db, init_db
+from app.models.task import TaskORM
+from app.schemas.task import TaskCreate, TaskRead, TaskUpdate
 
 app = FastAPI(title="TaskFlow API")
 app.add_middleware(

@@ -28,7 +28,7 @@ def init_db() -> None:
     if DATABASE_URL.startswith("sqlite"):
         DEFAULT_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-    from backend.app.models.task import TaskORM
+    from app.models.task import TaskORM
 
     TaskORM.__table__
     Base.metadata.create_all(bind=engine)
