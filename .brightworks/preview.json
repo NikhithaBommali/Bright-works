@@ -1,9 +1,17 @@
 {
+  "frontend": {
+    "runtime": "node",
+    "port": 5173,
+    "install": "npm install --no-audit --no-fund",
+    "start": "npm run dev -- --host 0.0.0.0 --port 5173",
+    "files": ["src/**", "package.json", "vite.config.*", "index.html", "public/**"]
+  },
   "backend": {
     "runtime": "python",
     "port": 3000,
-    "install": "pip install --no-cache-dir -r requirements.txt",
-    "start": "uvicorn main:app --host 0.0.0.0 --port 3000",
-    "files": ["main.py", "requirements.txt"]
+    "install": "pip install --no-cache-dir -r backend/requirements.txt",
+    "start": "cd backend && uvicorn main:app --host 0.0.0.0 --port 3000",
+    "files": ["backend/main.py", "backend/requirements.txt", "backend/app/**"],
+    "database": "sqlite"
   }
 }
