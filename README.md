@@ -7,77 +7,51 @@ TaskFlow is a full-stack app with a React + Vite + TypeScript frontend and a Fas
 - `backend/` — FastAPI app, tests, and backend dependencies
 - `frontend/` — React app, Vite config, and frontend dependencies
 
-## Local setup
+## TaskFlow
 
-### Backend
+### Backend local run
 
-Install dependencies from the backend directory:
+From `backend/`:
 
 ```bash
 cd backend
+cp .env.example .env
 pip install --no-cache-dir -r requirements.txt
-```
-
-Start the API server from `backend/`:
-
-```bash
 uvicorn main:app --host 0.0.0.0 --port 3000
 ```
 
-The backend uses SQLite for local persistence. By default it stores data in a local SQLite file, and it reads `DATABASE_URL` if you want to override the database location.
+The backend runs on port `3000` and uses SQLite persistence. `backend/.env.example` documents the local `DATABASE_URL` value; adjust it if you want to point at a different SQLite file.
 
-### Frontend
+### Frontend local run
 
-Install dependencies from the frontend directory:
+From `frontend/`:
 
 ```bash
 cd frontend
 npm install
-```
-
-Start the Vite dev server from `frontend/`:
-
-```bash
 npm run dev
 ```
 
-The frontend runs on port `5173` in local development.
+The frontend runs on port `5173`.
 
-## Frontend API configuration
+### Frontend API base URL
 
-The frontend API client uses:
+The frontend API client reads:
 
 ```ts
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 ```
 
-Requests are built as `${API_BASE}/api/tasks` and related task URLs. When `VITE_API_BASE_URL` is unset, the frontend sends requests to the same origin as the Vite app. When it is set, the frontend sends requests to that base URL.
+Task requests are sent to `${API_BASE}/api/...` paths. With `VITE_API_BASE_URL` unset, the app uses the same origin as the Vite dev server. Set `VITE_API_BASE_URL` when the backend is served from a different origin.
 
-For local development, leave `VITE_API_BASE_URL` unset when the frontend and backend run on the same machine and you want the browser to reach the API through the Vite origin. Set it explicitly only when the backend is hosted on a different origin.
-
-## Environment configuration
-
-Backend local startup uses the example env file:
-
-```bash
-cp backend/.env.example backend/.env
-```
-
-`backend/.env.example` documents the local `DATABASE_URL` value and notes that no API key is required.
-
-If you need to point the backend at a different SQLite file, set `DATABASE_URL` before starting `uvicorn`.
-
-## Exercising the CRUD flow locally
+### Local CRUD flow
 
 1. Start the backend from `backend/`.
 2. Start the frontend from `frontend/`.
 3. Open the Vite URL shown in the terminal.
-4. Create a task with a title, description, and status.
-5. Confirm it appears in the task list.
-6. Edit the task and save the changes.
-7. Delete the task and confirm it is removed from the list.
+4. Create, edit, and delete tasks from the TaskFlow UI.
 
-The backend supports these task operations under `/api/tasks`:
+The backend exposes task CRUD under `/api/tasks`:
 
 - `GET /api/tasks` returns a bare JSON array of tasks.
 - `POST /api/tasks` creates a task.
