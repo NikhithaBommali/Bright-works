@@ -51,16 +51,47 @@ The frontend API client uses:
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 ```
 
-It builds every request as:
+Requests are built as `${API_BASE}/api/tasks` and related task URLs. When `VITE_API_BASE_URL` is unset, the frontend sends requests to the same origin as the Vite app. When it is set, the frontend sends requests to that base URL.
 
-```ts
-`${API_BASE}/api/...`
+For local development, leave `VITE_API_BASE_URL` unset when the frontend and backend run on the same machine and you want the browser to reach the API through the Vite origin. Set it explicitly only when the backend is hosted on a different origin.
+
+## Environment configuration
+
+Backend local startup uses the example env file:
+
+```bash
+cp backend/.env.example backend/.env
 ```
 
-Behavior for `VITE_API_BASE_URL`:
+`backend/.env.example` documents the local `DATABASE_URL` value and notes that no API key is required.
 
-- Local development: leave it unset to send requests to the same origin as the frontend.
-- Preview or a separate backend origin: set it to the backend base URL so requests resolve to that host.
+If you need to point the backend at a different SQLite file, set `DATABASE_URL` before starting `uvicorn`.
+
+## Exercising the CRUD flow locally
+
+1. Start the backend from `backend/`.
+2. Start the frontend from `frontend/`.
+3. Open the Vite URL shown in the terminal.
+4. Create a task with a title, description, and status.
+5. Confirm it appears in the task list.
+6. Edit the task and save the changes.
+7. Delete the task and confirm it is removed from the list.
+
+The backend supports these task operations under `/api/tasks`:
+
+- `GET /api/tasks` returns a bare JSON array of tasks.
+- `POST /api/tasks` creates a task.
+- `GET /api/tasks/{id}` returns one task or `404`.
+- `PUT /api/tasks/{id}` updates one task or `404`.
+- `DELETE /api/tasks/{id}` deletes one task and returns `204`.
+
+Accepted task status values are `todo`, `in-progress`, and `done`.
+
+## Reviewer checklist
+
+- Files changed: `README.md`
+- How to run tests: backend tests were run with `cd backend && pytest tests/test_tasks_api.py -q`
+- Manual checks to verify: frontend starts, backend starts, the frontend reaches the API using `VITE_API_BASE_URL` when set or same-origin when unset, and the CRUD flow works end to end for create, edit, and delete.
 
 ## Persistence notes
 
