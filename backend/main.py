@@ -14,24 +14,15 @@ from __future__ import annotations
 # DELETE /api/tasks/{id}
 #   response: 204 No Content
 
-from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
-from app.database import Base, DATABASE_URL, engine, get_db
-from app.models.task import TaskORM
-from app.schemas.task import TaskCreate, TaskRead, TaskUpdate
-
-def init_db() -> None:
-    if DATABASE_URL.startswith("sqlite"):
-        sqlite_path = DATABASE_URL.replace("sqlite:///", "", 1)
-        Path(sqlite_path).parent.mkdir(parents=True, exist_ok=True)
-
-    Base.metadata.create_all(bind=engine)
-
+from backend.app.database import get_db, init_db
+from backend.app.models.task import TaskORM
+from backend.app.schemas.task import TaskCreate, TaskRead, TaskUpdate
 
 app = FastAPI(title="TaskFlow API")
 app.add_middleware(
