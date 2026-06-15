@@ -1,0 +1,17 @@
+{
+  "frontend": {
+    "runtime": "node",
+    "port": 5173,
+    "install": "cd frontend && npm install --no-audit --no-fund",
+    "start": "cd frontend && npm run dev -- --host 0.0.0.0 --port 5173",
+    "files": ["frontend/src/**", "frontend/package.json", "frontend/vite.config.*", "frontend/index.html", "frontend/public/**"]
+  },
+  "backend": {
+    "runtime": "python",
+    "database": "postgres",
+    "port": 3000,
+    "install": "cd backend && pip install --no-cache-dir -r requirements.txt",
+    "start": "cd backend && uvicorn main:app --host 0.0.0.0 --port 3000",
+    "files": ["backend/main.py", "backend/requirements.txt"]
+  }
+}
