@@ -5,21 +5,27 @@ from pathlib import Path
 from typing import Generator
 
 from sqlalchemy import create_engine
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
-DATA_DIR = Path(os.getenv("BW_DATA_DIR", "/app/data"))
-DATABASE_URL = f"sqlite:///{(DATA_DIR / 'taskflow.db').resolve()}"
+DATA_DIR = Path(os.environ.get("BW_DATA_DIR", Path(__file__).resolve().parents[2]))
+DEFAULT_DB_PATH = DATA_DIR / "taskflow.db"
+DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{DEFAULT_DB_PATH}")
 
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False},
-)
+
+def _create_engine() -> Engine:
+    connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+    return create_engine(DATABASE_URL, connect_args=connect_args)
+
+
+engine = _create_engine()
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 
 def init_db() -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    if DATABASE_URL.startswith("sqlite"):
+        DEFAULT_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     from app.models.task import TaskORM
 
