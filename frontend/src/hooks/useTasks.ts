@@ -14,6 +14,7 @@ export function useTasks() {
       const data = await fetchTasks();
       setTasks(data);
     } catch (err) {
+      setTasks([]);
       setError(err instanceof Error ? err.message : 'Unable to load tasks.');
     } finally {
       setIsLoading(false);
@@ -29,7 +30,7 @@ export function useTasks() {
     setError(null);
     try {
       const created = await createTask(payload);
-      setTasks((current) => [...current, created]);
+      setTasks((current) => [created, ...current]);
       return created;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unable to create task.';
