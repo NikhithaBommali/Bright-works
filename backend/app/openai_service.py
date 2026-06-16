@@ -1,119 +1,104 @@
 from __future__ import annotations
 
-import functools
 import json
 import os
-from typing import Literal
+from functools import lru_cache
+from typing import Any, Literal
+from uuid import uuid4
 
 from fastapi import HTTPException
 from openai import OpenAI
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
-from app.persistence import Meal, MealDifficulty, Preferences
+from app.schemas.meals import DayPlan, Meal
+from app.schemas.preferences import Preference
+
+MealSlot = Literal["Breakfast", "Lunch", "Snack", "Dinner"]
+Difficulty = Literal["Easy", "Medium"]
 
 
-class MealWithSlot(BaseModel):
+class GeneratedMeal(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    slot: MealSlot
     name: str
     description: str
     ingredients: list[str]
     prepTimeMinutes: int = Field(ge=0)
-    difficulty: MealDifficulty
+    difficulty: Difficulty
 
 
-class DayMealsResponse(BaseModel):
-    breakfast: MealWithSlot
-    lunch: MealWithSlot
-    snack: MealWithSlot
-    dinner: MealWithSlot
-
-
-class GeneratedDayResponse(BaseModel):
+class GeneratedDay(BaseModel):
     date: str
-    meals: DayMealsResponse
+    meals: list[GeneratedMeal]
 
 
-class AlternativeResponse(BaseModel):
-    meal: MealWithSlot
-
-
-@functools.lru_cache(maxsize=1)
+@lru_cache(maxsize=1)
 def _openai_client() -> OpenAI:
     return OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 
-def _require_key() -> str:
-    key = os.environ.get("OPENAI_API_KEY")
-    if not key:
-        raise HTTPException(status_code=503, detail="OPENAI_API_KEY is not configured")
-    return key
+def _require_key() -> None:
+    if not os.environ.get("OPENAI_API_KEY"):
+        raise HTTPException(status_code=503, detail="OPENAI_API_KEY is not configured on the backend")
 
 
-def _preferences_text(preferences: Preferences) -> str:
-    restrictions = ", ".join(preferences.dietaryRestrictions) or "none"
-    avoid = preferences.foodsToAvoid.strip() or "none"
-    cuisines = ", ".join(preferences.cuisinePreferences) or "none"
-    return (
-        f"numberOfKids={preferences.numberOfKids}; ageRange={preferences.ageRange}; "
-        f"dietaryRestrictions={restrictions}; foodsToAvoid={avoid}; cuisinePreferences={cuisines}."
-    )
+def _prompt(preferences: Preference) -> str:
+    return json.dumps(preferences.model_dump(), ensure_ascii=False)
 
 
-def _normalize_meal(meal: MealWithSlot) -> Meal:
-    return Meal(
-        name=meal.name.strip(),
-        description=meal.description.strip(),
-        ingredients=[item.strip() for item in meal.ingredients if item.strip()],
-        prepTimeMinutes=int(meal.prepTimeMinutes),
-        difficulty=meal.difficulty,
-    )
-
-
-def _prompt_for_day(date: str, preferences: Preferences) -> str:
-    return (
-        f"Generate a kid-friendly full-day meal plan for {date}. "
-        f"Use and respect these preferences exactly: {_preferences_text(preferences)} "
-        "Avoid ingredients that conflict with dietaryRestrictions and foodsToAvoid. "
-        "Return only JSON matching the schema."
-    )
-
-
-def generate_day(date: str, preferences: Preferences) -> dict[str, Meal]:
+def generate_day(date: str, preferences: Preference) -> DayPlan:
     _require_key()
     client = _openai_client()
-    response = client.responses.parse(
-        model="gpt-4o-mini",
-        input=[
-            {"role": "system", "content": "You generate structured JSON only."},
-            {"role": "user", "content": _prompt_for_day(date, preferences)},
-        ],
-        text_format=GeneratedDayResponse,
-    )
-    meals = response.output_parsed.meals
-    return {
-        "breakfast": _normalize_meal(meals.breakfast),
-        "lunch": _normalize_meal(meals.lunch),
-        "snack": _normalize_meal(meals.snack),
-        "dinner": _normalize_meal(meals.dinner),
-    }
-
-
-def generate_alternative(date: str, slot: Literal["breakfast", "lunch", "snack", "dinner"], preferences: Preferences, existing: dict[str, Meal]) -> Meal:
-    _require_key()
-    client = _openai_client()
-    existing_json = json.dumps({k: v.model_dump() for k, v in existing.items()}, ensure_ascii=False)
-    response = client.responses.parse(
-        model="gpt-4o-mini",
-        input=[
-            {"role": "system", "content": "You generate structured JSON only."},
-            {
-                "role": "user",
-                "content": (
-                    f"Generate a replacement {slot} for {date}. {_preferences_text(preferences)} "
-                    f"Keep the other meal slots unchanged: {existing_json}. "
-                    "Return only JSON matching the schema."
-                ),
+    schema = {
+        "name": "day_plan",
+        "schema": {
+            "type": "object",
+            "properties": {
+                "date": {"type": "string"},
+                "meals": {
+                    "type": "array",
+                    "minItems": 4,
+                    "maxItems": 4,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "string"},
+                            "slot": {"type": "string", "enum": ["Breakfast", "Lunch", "Snack", "Dinner"]},
+                            "name": {"type": "string"},
+                            "description": {"type": "string"},
+                            "ingredients": {"type": "array", "items": {"type": "string"}},
+                            "prepTimeMinutes": {"type": "number"},
+                            "difficulty": {"type": "string", "enum": ["Easy", "Medium"]},
+                        },
+                        "required": ["id", "slot", "name", "description", "ingredients", "prepTimeMinutes", "difficulty"],
+                        "additionalProperties": False,
+                    },
+                },
             },
-        ],
-        text_format=AlternativeResponse,
-    )
-    return _normalize_meal(response.output_parsed.meal)
+            "required": ["date", "meals"],
+            "additionalProperties": False,
+        },
+    }
+    resp = client.chat.completions.create(model="gpt-4o-mini", response_format={"type": "json_schema", "json_schema": schema}, messages=[{"role": "system", "content": "Return only JSON matching schema and respect dietary preferences."}, {"role": "user", "content": f"date={date}; preferences={_prompt(preferences)}"}])
+    try:
+        content = resp.choices[0].message.content or "{}"
+        raw = json.loads(content)
+        raw["date"] = date
+        plan = GeneratedDay.model_validate(raw)
+        return DayPlan(date=plan.date, meals=[Meal.model_validate(m.model_dump()) for m in plan.meals])
+    except (json.JSONDecodeError, ValidationError, KeyError, TypeError) as exc:
+        raise HTTPException(status_code=502, detail="Failed to validate OpenAI meal response") from exc
+
+
+def generate_single(date: str, slot: MealSlot, preferences: Preference, existing: DayPlan) -> Meal:
+    _require_key()
+    client = _openai_client()
+    existing_meals = [meal.model_dump() for meal in existing.meals if meal.slot != slot]
+    resp = client.chat.completions.create(model="gpt-4o-mini", response_format={"type": "json_object"}, messages=[{"role": "system", "content": "Return JSON for one replacement meal only."}, {"role": "user", "content": json.dumps({"date": date, "slot": slot, "preferences": preferences.model_dump(), "keep": existing_meals}, ensure_ascii=False)}])
+    try:
+        raw = json.loads(resp.choices[0].message.content or "{}")
+        raw["slot"] = slot
+        meal = GeneratedMeal.model_validate(raw)
+        return Meal.model_validate(meal.model_dump())
+    except (json.JSONDecodeError, ValidationError, KeyError, TypeError) as exc:
+        raise HTTPException(status_code=502, detail="Failed to validate OpenAI meal response") from exc
