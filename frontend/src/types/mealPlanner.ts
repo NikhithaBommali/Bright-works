@@ -1,6 +1,6 @@
-export type MealSlot = 'Breakfast' | 'Lunch' | 'Snack' | 'Dinner';
+export type MealSlot = 'breakfast' | 'lunch' | 'snack' | 'dinner';
 
-export type Preference = {
+export type Preferences = {
   numberOfKids: number;
   ageRange: string;
   dietaryRestrictions: string[];
@@ -9,8 +9,6 @@ export type Preference = {
 };
 
 export type Meal = {
-  id: string;
-  slot: MealSlot;
   name: string;
   description: string;
   ingredients: string[];
@@ -18,39 +16,57 @@ export type Meal = {
   difficulty: 'Easy' | 'Medium';
 };
 
-export type DayPlan = {
-  date: string;
-  meals: Meal[];
-};
+export type DayMeals = Record<MealSlot, Meal>;
 
-export type PreferencesResponse = {
-  preferences: Preference;
-};
+export type NullableDayMeals = Record<MealSlot, Meal | null>;
 
 export type DayPlanResponse = {
-  plan: DayPlan;
-};
-
-export type WeekEntry = {
   date: string;
-  plan: DayPlan | null;
+  meals: DayMeals;
 };
 
-export type WeekResponse = {
-  week: WeekEntry[];
+export type WeekPlanDay = {
+  date: string;
+  meals: NullableDayMeals;
+};
+
+export type WeekPlanResponse = {
+  selectedDate: string;
+  days: WeekPlanDay[];
+};
+
+export type Favorite = {
+  id: string;
+  name: string;
+  description: string;
+  ingredients: string[];
+  prepTimeMinutes: number;
+  difficulty: 'Easy' | 'Medium';
 };
 
 export type FavoritesResponse = {
-  favorites: Meal[];
+  favorites: Favorite[];
+};
+
+export type FavoriteDeleteResponse = {
+  deleted: boolean;
+  id: string;
 };
 
 export type GenerateDayRequest = {
   date: string;
-  preferences: Preference;
+  preferences: Preferences;
 };
 
 export type SuggestAlternativeRequest = {
   date: string;
   slot: MealSlot;
-  preferences: Preference;
+  preferences: Preferences;
+};
+
+export type SuggestAlternativeResponse = {
+  date: string;
+  slot: MealSlot;
+  meal: Meal;
+  meals: DayMeals;
 };
