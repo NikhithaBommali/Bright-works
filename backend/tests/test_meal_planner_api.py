@@ -177,14 +177,33 @@ def test_favorites_round_trip_with_bare_array_list_response(client):
     assert client.get("/api/favorites").json() == []
 
 
-def test_generation_endpoints_return_503_without_openai_api_key(client, monkeypatch):
+@pytest.mark.parametrize(
+    "endpoint,payload",
+    [
+        (
+            "/api/meals/generate-day",
+            {"date": "2026-01-03", "preferences": DEFAULT_PREFERENCES.model_dump()},
+        ),
+        (
+            "/api/meals/suggest-alternative",
+            {
+                "date": "2026-01-03",
+                "slot": "dinner",
+                "preferences": DEFAULT_PREFERENCES.model_dump(),
+                "current_plan": {
+                    "breakfast": meal_payload("Breakfast"),
+                    "lunch": meal_payload("Lunch"),
+                    "snack": meal_payload("Snack"),
+                    "dinner": meal_payload("Dinner"),
+                },
+            },
+        ),
+    ],
+)
+def test_generation_endpoints_return_503_without_openai_api_key(client, monkeypatch, endpoint, payload):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
-    response = client.post(
-        "/api/meals/generate-day",
-        json={"date": "2026-01-01", "preferences": DEFAULT_PREFERENCES.model_dump()},
-    )
+    response = client.post(endpoint, json=payload)
 
     assert response.status_code == 503
-    assert "OPENAI_API_KEY" in response.json()["detail"].upper()
-    assert "fallback" not in response.text.lower()
+    assert response.json() == {"detail": "OPENAI_API_KEY is not configured"}

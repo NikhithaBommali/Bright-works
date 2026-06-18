@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 const defaultPreferences = {
   number_of_kids: 1,
   age_range: '1-3 years',
-  dietary_restriction: 'None',
+  dietary_restrictions: 'None',
   foods_to_avoid: '',
   cuisine_preferences: [],
 };
