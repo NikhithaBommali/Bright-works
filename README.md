@@ -25,6 +25,20 @@ This repository is a strict monorepo for a fullstack Rolodex contact book:
 #### Install
 
 ```bash
+# from repo root
+cd backend
+python -m venv .venv
+source .venv/bin/activate  # macOS/Linux
+# .venv\\Scripts\\activate  # Windows
+pip install -r requirements.txt
+```
+
+(You can also use the manual steps below if you prefer.)
+
+#### Install
+
+```bash
+# from repo root
 cd backend
 python -m venv .venv
 source .venv/bin/activate  # macOS/Linux
@@ -34,17 +48,17 @@ pip install -r requirements.txt
 
 #### Configure SQLite
 
-The backend uses `DATABASE_URL` (default: `sqlite:///./rolodex.db`).
+The backend uses `SQLITE_URL`.
 
 ```bash
 # backend/.env.example
-DATABASE_URL=sqlite:///./rolodex.db
+SQLITE_URL=sqlite:///./rolodex.db
 ```
 
 Notes on SQLite persistence:
-- The database file is created/used at the path implied by `DATABASE_URL` (by default `backend/rolodex.db`).
-- On startup, the backend initializes the schema with `Base.metadata.create_all(bind=engine)`.
-- In environments where filesystem persistence is ephemeral (e.g., some preview/browser preview setups), the database may reset between runs; this is best-effort persistence.
+- The SQLite DB is stored in a local file path derived from `SQLITE_URL` (for the default, `./rolodex.db` relative to the backend working directory).
+- The backend initializes the schema on startup using the configured SQLite engine.
+- In environments where the filesystem is ephemeral (e.g., preview deployments), durability is best-effort: the DB file may be reset between runs.
 
 #### Run
 
@@ -119,6 +133,8 @@ Returns a list of contacts.
 **Auth**: none (public)
 
 **Response** `200 OK`
+
+The backend returns a bare JSON array (not an envelope):
 
 ```json
 [
@@ -246,9 +262,13 @@ Deletes a contact.
 
 **Auth**: none (public)
 
-**Response** `204 No Content`
+**Response** `200 OK`
 
-No response body.
+```json
+{
+  "ok": true
+}
+```
 
 **Errors**
 - `404 Not Found` — contact id does not exist
