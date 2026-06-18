@@ -6,7 +6,7 @@ export type MealSlot = 'breakfast' | 'lunch' | 'snack' | 'dinner';
 export type Preferences = {
   number_of_kids: number;
   age_range: string;
-  dietary_restrictions: string[];
+  dietary_restriction: string;
   foods_to_avoid: string;
   cuisine_preferences: string[];
 };
@@ -21,20 +21,18 @@ export type Meal = {
 
 export type DayMeals = Record<MealSlot, Meal>;
 
-export type DayPlanEnvelope = {
+export type DayPlan = {
   date: string;
   meals: DayMeals;
 };
-
-export type DayPlan = DayPlanEnvelope;
 
 export type WeekDay = {
   date: string;
-  meals: DayMeals;
+  meals: DayMeals | null;
 };
 
 export type WeekPlan = {
-  selected_date: string;
+  week_start: string;
   days: WeekDay[];
 };
 
@@ -115,7 +113,7 @@ export async function savePreferences(payload: Preferences): Promise<Preferences
   });
 }
 
-export async function generateDayPlan(payload: { date: string; preferences: Preferences }): Promise<DayPlanEnvelope> {
+export async function generateDayPlan(payload: { date: string; preferences: Preferences }): Promise<DayPlan> {
   return request<DayPlan>('/api/meals/generate-day', {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -126,9 +124,8 @@ export async function suggestAlternative(payload: {
   date: string;
   slot: MealSlot;
   preferences: Preferences;
-  current_day_plan: DayPlanEnvelope;
-}): Promise<DayPlanEnvelope> {
-  return request<DayPlanEnvelope>('/api/meals/suggest-alternative', {
+}): Promise<DayPlan> {
+  return request<DayPlan>('/api/meals/suggest-alternative', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
@@ -149,8 +146,9 @@ export async function addFavorite(payload: { meal: Meal }): Promise<Favorite> {
   });
 }
 
-export async function deleteFavorite(payload: { id: string }): Promise<void> {
-  return request<void>(`/api/favorites?id=${encodeURIComponent(payload.id)}`, {
+export async function deleteFavorite(payload: { id: string }): Promise<{ id: string; deleted: true }> {
+  return request<{ id: string; deleted: true }>('/api/favorites', {
     method: 'DELETE',
+    body: JSON.stringify(payload),
   });
 }

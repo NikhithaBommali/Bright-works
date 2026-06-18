@@ -8,8 +8,8 @@ import { Field } from '../ui/Field';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 
-const AGE_OPTIONS = ['2-5', '6-8', '9-12'];
-const DIET_OPTIONS = ['none', 'vegetarian', 'vegan', 'gluten-free', 'dairy-free'];
+const AGE_OPTIONS = ['1-3 years', '4-6 years', '7-9 years', '10-12 years'];
+const DIET_OPTIONS = ['None', 'Vegetarian', 'Vegan', 'Gluten-Free', 'Dairy-Free'];
 const CUISINE_OPTIONS = ['Italian', 'Mexican', 'Indian', 'Mediterranean', 'American', 'Asian'];
 
 interface PreferencesPanelProps {
