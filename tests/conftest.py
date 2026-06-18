@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 @pytest_asyncio.fixture
 async def client(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("BW_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'test.db'}")
 
     import importlib
 
