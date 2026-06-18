@@ -4,17 +4,13 @@ import json
 import os
 from pathlib import Path
 from threading import Lock
-from typing import Any
+from typing import Any, Callable
 
 DATA_DIR = Path(os.environ.get("BW_DATA_DIR", Path(__file__).resolve().parent.parent / "data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 STORE_PATH = DATA_DIR / "meal_planner_store.json"
 _LOCK = Lock()
-_DEFAULT_STORE: dict[str, Any] = {
-    "preferences": None,
-    "day_plans": {},
-    "favorites": [],
-}
+_DEFAULT_STORE: dict[str, Any] = {"preferences": None, "day_plans": {}, "favorites": []}
 
 
 def _load() -> dict[str, Any]:
@@ -32,7 +28,7 @@ def read_store() -> dict[str, Any]:
         return _load()
 
 
-def update_store(mutator):
+def update_store(mutator: Callable[[dict[str, Any]], Any]) -> Any:
     with _LOCK:
         store = _load()
         result = mutator(store)

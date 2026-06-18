@@ -12,10 +12,12 @@ from openai import OpenAI
 
 from app.schemas.meal_planner import (
     DEFAULT_PREFERENCES,
+    DeleteFavoriteResponse,
     DayPlan,
     FavoriteCreateRequest,
     FavoriteDeleteRequest,
     FavoriteItem,
+    FavoritesResponse,
     GenerateDayRequest,
     GenerateDayResponse,
     Meal,
@@ -28,7 +30,7 @@ from app.storage import read_store, update_store
 
 router = APIRouter(prefix="/api", tags=["meal-planner"])
 favorites_router = APIRouter(prefix="/api/favorites", tags=["favorites"])
-
+meal_router = APIRouter(prefix="/api/meals", tags=["meals"])
 MealSlot = Literal["breakfast", "lunch", "snack", "dinner"]
 
 
@@ -40,21 +42,21 @@ def _openai_client() -> OpenAI:
     return OpenAI(api_key=key)
 
 
-def _generate_meal_plan(prompt: str) -> dict[str, object]:
+def _generate_meal_plan(prompt: dict[str, Any]) -> dict[str, Any]:
     client = _openai_client()
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         response_format={"type": "json_object"},
         messages=[
             {"role": "system", "content": "Return strict JSON for a kid-friendly meal planner. Use only the requested schema."},
-            {"role": "user", "content": prompt},
+            {"role": "user", "content": json.dumps(prompt)},
         ],
     )
     content = response.choices[0].message.content or "{}"
     return json.loads(content)
 
 
-def _meal_schema() -> dict[str, object]:
+def _meal_schema() -> dict[str, Any]:
     return {
         "type": "object",
         "properties": {
@@ -69,7 +71,7 @@ def _meal_schema() -> dict[str, object]:
     }
 
 
-def _day_plan_schema() -> dict[str, object]:
+def _day_plan_schema() -> dict[str, Any]:
     return {
         "type": "object",
         "properties": {

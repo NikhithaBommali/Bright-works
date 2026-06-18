@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 class Preferences(BaseModel):
     number_of_kids: int = Field(ge=1)
     age_range: str
-    dietary_restrictions: list[str]
+    dietary_restrictions: str
     foods_to_avoid: str
     cuisine_preferences: list[str]
 
@@ -19,7 +19,7 @@ class Meal(BaseModel):
     description: str
     ingredients: list[str]
     prep_time_minutes: int = Field(ge=0)
-    difficulty: Literal["Easy", "Medium", "Hard"]
+    difficulty: Literal["Easy", "Medium"]
 
 
 class DayPlan(BaseModel):
@@ -36,12 +36,12 @@ class SuggestAlternativeRequest(BaseModel):
     date: date
     slot: Literal["breakfast", "lunch", "snack", "dinner"]
     preferences: Preferences
-    current_day_plan: DayPlan
+    current_plan: DayPlan
 
 
 class WeekDayPlan(BaseModel):
     date: date
-    meals: dict[Literal["breakfast", "lunch", "snack", "dinner"], Meal]
+    meals: dict[Literal["breakfast", "lunch", "snack", "dinner"], Meal] | None = None
 
 
 class WeekPlanResponse(BaseModel):
@@ -54,18 +54,32 @@ class FavoriteCreateRequest(BaseModel):
 
 
 class FavoriteItem(BaseModel):
-    id: str
+    favorite_id: str
     meal: Meal
 
 
 class FavoriteDeleteRequest(BaseModel):
-    id: str
+    favorite_id: str
+
+
+class FavoritesResponse(BaseModel):
+    favorites: list[FavoriteItem]
+
+
+class DeleteFavoriteResponse(BaseModel):
+    deleted: bool
+    favorite_id: str
+
+
+class GenerateDayResponse(BaseModel):
+    date: date
+    meals: dict[Literal["breakfast", "lunch", "snack", "dinner"], Meal]
 
 
 DEFAULT_PREFERENCES = Preferences(
     number_of_kids=1,
     age_range="2-5",
-    dietary_restrictions=["none"],
+    dietary_restrictions="none",
     foods_to_avoid="",
     cuisine_preferences=[],
 )
