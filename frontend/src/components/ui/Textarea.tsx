@@ -1,0 +1,19 @@
+import type { TextareaHTMLAttributes } from 'react';
+import { cn } from '../../utils/cn';
+
+interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
+  hasError?: boolean;
+}
+
+export function Textarea({ className, hasError = false, ...props }: TextareaProps) {
+  return (
+    <textarea
+      className={cn(
+        'flex min-h-[120px] w-full rounded-lg border bg-background/80 px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
+        hasError ? 'border-destructive focus-visible:ring-destructive' : 'border-input',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
