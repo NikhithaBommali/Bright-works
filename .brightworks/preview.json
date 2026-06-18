@@ -1,0 +1,9 @@
+{
+  "backend": {
+    "runtime": "python",
+    "port": 3000,
+    "install": "pip install --no-cache-dir -r requirements.txt",
+    "start": "uvicorn main:app --host 0.0.0.0 --port 3000",
+    "files": ["main.py", "requirements.txt"]
+  }
+}
