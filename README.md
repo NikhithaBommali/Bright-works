@@ -20,6 +20,10 @@ This repository is a strict monorepo for a fullstack Rolodex contact book:
 
 ## Local development (backend + frontend)
 
+This monorepo includes the kids daily meal planner app (React frontend + FastAPI backend) in addition to the Rolodex contacts app.
+
+The frontend calls backend endpoints using relative `/api/*` requests (see `frontend/src/api-client/*`).
+
 ### 1) Backend (FastAPI)
 
 #### Install
@@ -36,9 +40,12 @@ pip install -r requirements.txt
 
 The backend uses `DATABASE_URL` (default: `sqlite:///./rolodex.db`).
 
+It also requires `OPENAI_API_KEY` to generate meal plans (no canned fallback). See `backend/.env.example` below.
+
 ```bash
 # backend/.env.example
 DATABASE_URL=sqlite:///./rolodex.db
+OPENAI_API_KEY=your-key-here
 ```
 
 Notes on SQLite persistence:
@@ -102,6 +109,225 @@ npm run preview
 ```
 
 Make sure `VITE_API_BASE_URL` still points at the running backend (e.g., `http://localhost:8000`) for local preview.
+
+## API: kids daily meal planner
+
+Meal planner endpoints are served under `/api/` by the FastAPI backend.
+
+> Frontend integration note: the React app uses relative requests like `/api/preferences`, `/api/meals/generate-day`, and `/api/week/{date}` (prefixed by `VITE_API_BASE_URL`).
+
+### GET /api/preferences
+
+Returns the current kid meal preferences.
+
+**Auth**: none (public)
+
+**Response** `200 OK`
+
+```json
+{
+  "number_of_kids": 1,
+  "age_range": "6-8",
+  "dietary_restriction": "none",
+  "foods_to_avoid": "",
+  "cuisine_preferences": []
+}
+```
+
+### PUT /api/preferences
+
+Saves kid meal preferences.
+
+**Auth**: none (public)
+
+**Request body**
+
+```json
+{
+  "number_of_kids": 2,
+  "age_range": "6-8",
+  "dietary_restriction": "vegetarian",
+  "foods_to_avoid": "mushrooms, olives",
+  "cuisine_preferences": ["Italian"]
+}
+```
+
+**Response** `200 OK`
+
+```json
+{
+  "number_of_kids": 2,
+  "age_range": "6-8",
+  "dietary_restriction": "vegetarian",
+  "foods_to_avoid": "mushrooms, olives",
+  "cuisine_preferences": ["Italian"]
+}
+```
+
+### POST /api/meals/generate-day
+
+Generates a complete meal plan for a day (Breakfast, Lunch, Snack, Dinner).
+
+**Auth**: none (public)
+
+**Request body**
+
+```json
+{
+  "date": "2026-06-18",
+  "preferences": {
+    "number_of_kids": 2,
+    "age_range": "6-8",
+    "dietary_restriction": "vegetarian",
+    "foods_to_avoid": "mushrooms",
+    "cuisine_preferences": ["Italian"]
+  }
+}
+```
+
+**Response** `200 OK`
+
+```json
+{
+  "date": "2026-06-18",
+  "meals": {
+    "breakfast": {
+      "name": "string",
+      "description": "string",
+      "ingredients": ["string"],
+      "prep_time_minutes": 10,
+      "difficulty": "Easy"
+    },
+    "lunch": {"name": "string", "description": "string", "ingredients": ["string"], "prep_time_minutes": 10, "difficulty": "Easy"},
+    "snack": {"name": "string", "description": "string", "ingredients": ["string"], "prep_time_minutes": 10, "difficulty": "Easy"},
+    "dinner": {"name": "string", "description": "string", "ingredients": ["string"], "prep_time_minutes": 10, "difficulty": "Easy"}
+  }
+}
+```
+
+**Errors**
+- `503 Service Unavailable` — when `OPENAI_API_KEY` is missing
+
+
+### POST /api/meals/suggest-alternative
+
+Regenerates only one meal slot inside a previously stored day plan.
+
+**Auth**: none (public)
+
+**Request body**
+
+```json
+{
+  "date": "2026-06-18",
+  "slot": "lunch",
+  "preferences": {
+    "number_of_kids": 2,
+    "age_range": "6-8",
+    "dietary_restriction": "vegetarian",
+    "foods_to_avoid": "mushrooms",
+    "cuisine_preferences": ["Italian"]
+  }
+}
+```
+
+**Response** `200 OK`
+
+```json
+{
+  "date": "2026-06-18",
+  "meals": {
+    "breakfast": {"name": "string", "description": "string", "ingredients": ["string"], "prep_time_minutes": 10, "difficulty": "Easy"},
+    "lunch": {"name": "string", "description": "string", "ingredients": ["string"], "prep_time_minutes": 10, "difficulty": "Easy"},
+    "snack": {"name": "string", "description": "string", "ingredients": ["string"], "prep_time_minutes": 10, "difficulty": "Easy"},
+    "dinner": {"name": "string", "description": "string", "ingredients": ["string"], "prep_time_minutes": 10, "difficulty": "Easy"}
+  }
+}
+```
+
+**Errors**
+- `503 Service Unavailable` — when `OPENAI_API_KEY` is missing
+- `404 Not Found` — no stored plan exists for the requested date
+
+### GET /api/week/{date}
+
+Returns a 7-day structure for the week containing `date`. Each day includes meals or `null` if no plan has been generated yet.
+
+**Auth**: none (public)
+
+**Response** `200 OK`
+
+```json
+{
+  "week_start": "2026-06-15",
+  "days": [
+    {"date": "2026-06-15", "meals": null},
+    {"date": "2026-06-16", "meals": null},
+    {"date": "2026-06-17", "meals": null},
+    {"date": "2026-06-18", "meals": {"breakfast": {"name": "string", "description": "string", "ingredients": ["string"], "prep_time_minutes": 10, "difficulty": "Easy"}, "lunch": {"name": "string", "description": "string", "ingredients": ["string"], "prep_time_minutes": 10, "difficulty": "Easy"}, "snack": {"name": "string", "description": "string", "ingredients": ["string"], "prep_time_minutes": 10, "difficulty": "Easy"}, "dinner": {"name": "string", "description": "string", "ingredients": ["string"], "prep_time_minutes": 10, "difficulty": "Easy"}},
+    {"date": "2026-06-19", "meals": null},
+    {"date": "2026-06-20", "meals": null},
+    {"date": "2026-06-21", "meals": null}
+  ]
+}
+```
+
+### Favorites
+
+Favorites let you save meals for later reuse.
+
+#### GET /api/favorites
+
+**Auth**: none (public)
+
+**Response** `200 OK`
+
+```json
+[
+  {
+    "id": "string",
+    "meal": {
+      "name": "string",
+      "description": "string",
+      "ingredients": ["string"],
+      "prep_time_minutes": 10,
+      "difficulty": "Easy"
+    }
+  }
+]
+```
+
+#### POST /api/favorites
+
+**Auth**: none (public)
+
+**Request body**
+
+```json
+{ "meal": {"name": "string", "description": "string", "ingredients": ["string"], "prep_time_minutes": 10, "difficulty": "Easy"} }
+```
+
+**Response** `200 OK`
+
+```json
+{ "id": "string", "meal": {"name": "string", "description": "string", "ingredients": ["string"], "prep_time_minutes": 10, "difficulty": "Easy"} }
+```
+
+#### DELETE /api/favorites
+
+**Auth**: none (public)
+
+**Request body**
+
+```json
+{ "id": "string" }
+```
+
+**Response** `200 OK`
+
+```json
+{ "id": "string", "deleted": true }
+```
 
 ## API: contacts
 
@@ -253,9 +479,37 @@ No response body.
 **Errors**
 - `404 Not Found` — contact id does not exist
 
-## Notes for frontend integration
+## Kids daily meal planner UI flows
+
+### Key flows
+
+### Run / preview steps
+
+- Start the backend (FastAPI) from `backend/` (see **Local development** above) with `OPENAI_API_KEY` set.
+- Start the frontend from `frontend/`:
+
+```bash
+cd frontend
+npm run dev
+```
+
+The frontend makes relative `/api/*` requests to the backend (it does not embed meal data locally).
+
+The meal planner page supports these flows:
+
+- **Preferences**: edit kid settings (number of kids, age range, dietary restriction, foods to avoid, cuisine preferences) and save them via `/api/preferences`.
+- **Generate day**: click **“Generate today’s plan”** to call `/api/meals/generate-day` and render Breakfast/Lunch/Snack/Dinner meal cards.
+- **Suggest alternative**: each meal card has **“Suggest alternative”** that calls `/api/meals/suggest-alternative` and updates only the selected slot.
+- **Weekly view**: a 7-day calendar uses `/api/week/{date}`; selecting a day shows that day’s stored plan (or empty if not generated).
+- **Favorites**: save a meal via `POST /api/favorites`, list via `GET /api/favorites`, and remove via `DELETE /api/favorites`.
+
+If `OPENAI_API_KEY` is missing, generation endpoints return `503` with a clear error and **do not fall back to canned meals**.
+
+## API: contacts
 
 The frontend API client calls relative paths like `/api/contacts` and prefixes them with `VITE_API_BASE_URL` via:
+
+For the kids meal planner, the same relative `/api/*` pattern is used (e.g., `/api/preferences`, `/api/meals/generate-day`, `/api/week/{date}`, and `/api/favorites`).
 
 ```ts
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
