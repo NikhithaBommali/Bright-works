@@ -12,21 +12,22 @@ from fastapi import APIRouter, HTTPException
 from openai import OpenAI
 
 from app.schemas.meal_planner import (
-    DailyPlan,
     DEFAULT_PREFERENCES,
-    FavoriteCreate,
-    FavoriteDelete,
-    FavoriteOut,
+    DayPlan,
+    FavoriteCreateRequest,
+    FavoriteDeleteRequest,
+    FavoriteItem,
     GenerateDayRequest,
     GenerateDayResponse,
     Meal,
     Preferences,
     SuggestAlternativeRequest,
-    WeekDayResponse,
-    WeekResponse,
+    WeekDayPlan,
+    WeekPlanResponse,
 )
 
-router = APIRouter(prefix="/api", tags=["meal-planner"])
+router = APIRouter(prefix="/api/meals", tags=["meal-planner"])
+favorites_router = APIRouter(prefix="/api/favorites", tags=["favorites"])
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 PREFERENCES_FILE = DATA_DIR / "preferences.json"
@@ -52,11 +53,11 @@ def _write_json(path: Path, data: Any) -> None:
     path.write_text(json.dumps(data, indent=2, sort_keys=True))
 
 
-def _normalize_plan(data: Any) -> DailyPlan:
-    return DailyPlan.model_validate(data)
+def _normalize_plan(data: Any) -> DayPlan:
+    return DayPlan.model_validate(data)
 
 
-def _meal_prompt(date_value: date, preferences: Preferences, slot: str | None, existing: DailyPlan | None) -> list[dict[str, str]]:
+def _meal_prompt(date_value: date, preferences: Preferences, slot: str | None, existing: DayPlan | None) -> list[dict[str, str]]:
     system = (
         "You are a kid-friendly meal planner for families. Return only valid JSON matching the schema. "
         "Respect restrictive preferences strictly, including vegetarian, vegan, halal, kosher, dairy-free, egg-free, nut-free, gluten-free, and allergy avoidance. "
@@ -80,7 +81,7 @@ def _meal_prompt(date_value: date, preferences: Preferences, slot: str | None, e
     return [{"role": "system", "content": system}, {"role": "user", "content": json.dumps(user)}]
 
 
-def _generate_plan(date_value: date, preferences: Preferences, slot: str | None = None, existing: DailyPlan | None = None) -> DailyPlan:
+def _generate_plan(date_value: date, preferences: Preferences, slot: str | None = None, existing: DayPlan | None = None) -> DayPlan:
     client = _openai_client()
     response = client.chat.completions.create(
         model="gpt-4o-mini",
@@ -91,7 +92,7 @@ def _generate_plan(date_value: date, preferences: Preferences, slot: str | None 
     payload = json.loads(content)
     if "meals" not in payload and all(slot_name in payload for slot_name in ("breakfast", "lunch", "snack", "dinner")):
         payload = {"date": date_value.isoformat(), "meals": payload}
-    return GenerateDayResponse.model_validate(payload).meals
+    return DayPlan.model_validate(payload)
 
 
 def _load_preferences() -> Preferences:
