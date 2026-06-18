@@ -1,3 +1,3 @@
 from __future__ import annotations
 
-from app.routers.meals import router
+from app.routers.meals import router as preferences_router
