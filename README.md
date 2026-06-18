@@ -12,8 +12,6 @@ Fullstack Kids Daily Meal Planner (React + FastAPI) using a strict monorepo layo
 - Python 3.10+ (for `backend/`)
 
 ## Environment variables
-The browser preview does **not** use `OPENAI_API_KEY`.
-
 All OpenAI configuration is provided to the **backend only**:
 - `OPENAI_API_KEY` — OpenAI key used for meal generation (required for `/api/meals/*` endpoints)
 
@@ -30,7 +28,8 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-# set OPENAI_API_KEY (e.g. from backend/.env.example)
+# set OPENAI_API_KEY (see backend/.env.example)
+export OPENAI_API_KEY="your-key-here"
 uvicorn main:app --reload --port 8000
 ```
 
@@ -42,8 +41,8 @@ npm run dev
 ```
 
 ### Runtime wiring
-- The frontend calls the backend using **relative** `'/api/*'` URLs.
-- Run both processes together so browser requests to `'/api/*'` reach FastAPI.
+- The frontend calls the backend using relative `'/api/*'` URLs.
+- Start **both** the frontend (Vite dev server) and backend (FastAPI) so browser requests to `'/api/*'` reach FastAPI (typically via Vite proxy / matching host setup).
 
 ## Dev entrypoints (exact)
 - **Backend**: `backend/main.py` (FastAPI app)
@@ -58,8 +57,8 @@ npm run dev
 
 ## Meal generation behavior (important)
 - Meal suggestions are generated at request time by the backend using **`gpt-4o-mini`**.
-- There is **no hardcoded meal catalog fallback** in the app.
-- If `OPENAI_API_KEY` is missing on the backend, meal generation endpoints return **HTTP 503** with a clear error and do not return canned meals.
+- There is **no static meal catalog fallback** in the app—meal/plan data comes only from backend `/api/*` routes.
+- If `OPENAI_API_KEY` is missing on the backend, the generation endpoints return **HTTP 503** with a clear error and do not return canned meals.
 
 ## API (backend routes used by the frontend)
 The frontend calls these endpoints under `/api`:
@@ -75,12 +74,15 @@ The frontend calls these endpoints under `/api`:
 ### Endpoint contracts (brief)
 - `GET /api/preferences` returns `{ numberOfKids, ageRange, dietaryRestrictions, foodsToAvoid, cuisinePreferences }`.
 - `PUT /api/preferences` saves and returns the same preference shape.
-- `POST /api/meals/generate-day` takes `{ date, preferences }` and returns `{ date, meals: { breakfast, lunch, snack, dinner } }`.
-- `POST /api/meals/suggest-alternative` takes `{ date, slot, preferences }` and returns `{ date, slot, meal, meals }` (updates only the requested slot).
+- `POST /api/meals/generate-day` takes `{ date, preferences }` and returns `{ date, meals: { Breakfast, Lunch, Snack, Dinner } }`.
+- `POST /api/meals/suggest-alternative` takes `{ date, slot, preferences, currentPlan }` and returns an updated `{ date, meals: { Breakfast, Lunch, Snack, Dinner } }` while preserving the other slots.
 - `GET /api/week/{date}` returns `{ selectedDate, days }` where `days` contains 7 items.
 - `GET /api/favorites` returns `{ favorites: [...] }`.
-- `POST /api/favorites` saves and returns `{ favorite }`.
-- `DELETE /api/favorites` removes by `id` and returns `{ deleted, id }`.
+- `POST /api/favorites` saves and returns `{ favorites: [...] }`.
+- `DELETE /api/favorites` removes a favorite and returns `{ favorites: [...] }`.
+
+## Preview-session persistence
+This app uses backend persistence to keep preferences, generated plans, and favorites across interactions **within the preview/session**. If the preview environment/container is restarted, you should expect persistence to reset (best-effort retention).
 
 ## Tests
 From repo root:
