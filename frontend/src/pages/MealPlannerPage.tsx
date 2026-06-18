@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import {
   addFavorite,
   fetchFavorites,
@@ -9,278 +8,267 @@ import {
   removeFavorite,
   savePreferences,
   suggestAlternative,
+  type DayPlan,
+  type Meal,
+  type MealSlot,
+  type Preferences,
+  type WeekPlanResponse,
 } from '../api-client/mealPlanner';
-import type { DayPlan, Meal, MealSlot, Preferences, WeekDay } from '../types/mealPlanner';
-import { AppShell } from '../components/layout/AppShell';
-import { PlannerHero } from '../components/layout/PlannerHero';
-import { DailyPlanPanel } from '../components/features/DailyPlanPanel';
-import { FavoritesPanel } from '../components/features/FavoritesPanel';
-import { PreferencesPanel } from '../components/features/PreferencesPanel';
-import { WeekCalendar } from '../components/features/WeekCalendar';
-import { Card } from '../components/ui/Card';
-import { Select } from '../components/ui/Select';
-import { formatLongDateLabel, todayIsoDate } from '../utils/date';
 
-const AGE_OPTIONS = ['2-5', '6-10', '11-13'];
-const DIETARY_OPTIONS = ['none', 'vegetarian', 'vegan', 'gluten-free', 'dairy-free', 'nut-free'];
+const AGE_OPTIONS = ['2–5 years', '6–10 years', '11–13 years'];
+const DIETARY_OPTIONS = ['Vegetarian', 'Vegan', 'Gluten Free', 'Dairy Free', 'Nut Free'];
 const CUISINE_OPTIONS = ['American', 'Italian', 'Mexican', 'Indian', 'Mediterranean', 'Asian'];
-const SLOT_OPTIONS: MealSlot[] = ['Breakfast', 'Lunch', 'Snack', 'Dinner'];
-const DEFAULT_PREFERENCES: Preferences = {
-  numberOfKids: 1,
-  ageRange: '2-5',
-  dietaryRestrictions: ['none'],
+const MEAL_SLOTS: MealSlot[] = ['Breakfast', 'Lunch', 'Snack', 'Dinner'];
+
+const defaultPreferences: Preferences = {
+  numberOfKids: 2,
+  ageRange: '',
+  dietaryRestrictions: [],
   foodsToAvoid: '',
   cuisinePreferences: [],
 };
 
-function toErrorMessage(error: unknown) {
-  if (error instanceof Error) {
-    const text = error.message;
-    if (text.includes('503') || text.toLowerCase().includes('openai')) {
-      return 'Meal generation is unavailable because the backend is missing OPENAI_API_KEY. Add the key to the backend environment and try again.';
-    }
-    return text;
-  }
-  return 'Something went wrong while talking to the meal planner service.';
+function todayIsoDate() {
+  return new Date().toISOString().slice(0, 10);
 }
 
-function replaceMealInDay(day: WeekDay, meal: Meal) {
-  return {
-    ...day,
-    meals: day.meals.map((entry) => (entry.slot === meal.slot ? meal : entry)),
-  };
+function formatDateLabel(date: string) {
+  return new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    weekday: 'long',
+  });
+}
+
+function getMealBySlot(plan: DayPlan | null, slot: MealSlot) {
+  return plan?.meals.find((meal) => meal.slot === slot) ?? null;
 }
 
 export function MealPlannerPage() {
-  const [preferences, setPreferences] = useState<Preferences>(DEFAULT_PREFERENCES);
-  const [selectedDate, setSelectedDate] = useState(todayIsoDate());
-  const [selectedReuseSlot, setSelectedReuseSlot] = useState<MealSlot>('Breakfast');
-  const [weekDays, setWeekDays] = useState<WeekDay[]>([]);
+  const [preferences, setPreferences] = useState<Preferences>(defaultPreferences);
+  const [weekPlan, setWeekPlan] = useState<WeekPlanResponse | null>(null);
   const [favorites, setFavorites] = useState<Meal[]>([]);
+  const [selectedDate, setSelectedDate] = useState(todayIsoDate());
   const [loading, setLoading] = useState(true);
-  const [weekLoading, setWeekLoading] = useState(false);
-  const [favoritesLoading, setFavoritesLoading] = useState(false);
-  const [savingPreferences, setSavingPreferences] = useState(false);
-  const [generatingDay, setGeneratingDay] = useState(false);
-  const [alternativeSlot, setAlternativeSlot] = useState<MealSlot | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-
-  const selectedDay = useMemo(() => weekDays.find((day) => day.date === selectedDate) ?? null, [weekDays, selectedDate]);
-  const currentPlan = useMemo<DayPlan | null>(() => (selectedDay ? { date: selectedDay.date, meals: selectedDay.meals } : null), [selectedDay]);
-  const hasMeals = Boolean(selectedDay && selectedDay.meals.length > 0);
-
-  async function loadWeek(date: string) {
-    setWeekLoading(true);
-    try {
-      const week = await fetchWeekPlan(date);
-      setWeekDays(week.days);
-      setSelectedDate(week.selectedDate);
-    } finally {
-      setWeekLoading(false);
-    }
-  }
-
-  async function bootstrap() {
-    setLoading(true);
-    setError(null);
-    try {
-      const [preferencesResponse, weekResponse, favoritesResponse] = await Promise.all([
-        fetchPreferences(),
-        fetchWeekPlan(selectedDate),
-        fetchFavorites(),
-      ]);
-      setPreferences(preferencesResponse);
-      setWeekDays(weekResponse.days);
-      setSelectedDate(weekResponse.selectedDate);
-      setFavorites(favoritesResponse.favorites);
-    } catch (bootstrapError) {
-      setError(toErrorMessage(bootstrapError));
-    } finally {
-      setLoading(false);
-    }
-  }
 
   useEffect(() => {
-    void bootstrap();
+    let active = true;
+
+    async function load() {
+      try {
+        const [preferencesResponse, weekResponse, favoritesResponse] = await Promise.all([
+          fetchPreferences(),
+          fetchWeekPlan(selectedDate),
+          fetchFavorites(),
+        ]);
+
+        if (!active) return;
+        setPreferences(preferencesResponse);
+        setWeekPlan(weekResponse);
+        setFavorites(favoritesResponse.favorites);
+        setSelectedDate(weekResponse.selectedDate || selectedDate);
+      } catch (loadError) {
+        if (active) {
+          setError(loadError instanceof Error ? loadError.message : 'Unable to load meal planner data.');
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void load();
+    return () => {
+      active = false;
+    };
   }, []);
 
+  const currentPlan = useMemo<DayPlan | null>(() => {
+    const day = weekPlan?.days.find((entry) => entry.date === selectedDate);
+    return day ? { date: day.date, meals: day.meals } : null;
+  }, [selectedDate, weekPlan]);
+
   async function handleSavePreferences() {
-    setSavingPreferences(true);
+    setSaving(true);
     setError(null);
-    setSuccess(null);
     try {
-      const saved = await savePreferences(preferences);
-      setPreferences(saved);
-      setSuccess('Preferences saved.');
+      const next = await savePreferences(preferences);
+      setPreferences(next);
     } catch (saveError) {
-      setError(toErrorMessage(saveError));
+      setError(saveError instanceof Error ? saveError.message : 'Unable to save preferences.');
     } finally {
-      setSavingPreferences(false);
+      setSaving(false);
     }
   }
 
   async function handleGenerateDay() {
-    setGeneratingDay(true);
+    setGenerating(true);
     setError(null);
-    setSuccess(null);
     try {
-      const plan = await generateDayPlan({ date: selectedDate, preferences });
-      setWeekDays((current) => current.map((day) => (day.date === plan.date ? { date: plan.date, meals: plan.meals } : day)));
-      await loadWeek(selectedDate);
-      setSuccess('Today’s meals are ready.');
+      const day = await generateDayPlan({ date: selectedDate, preferences });
+      setWeekPlan((current) => {
+        if (!current) {
+          return { selectedDate: day.date, days: [{ date: day.date, meals: day.meals }] };
+        }
+        const existing = current.days.some((entry) => entry.date === day.date);
+        return {
+          selectedDate: day.date,
+          days: existing
+            ? current.days.map((entry) => (entry.date === day.date ? { date: day.date, meals: day.meals } : entry))
+            : [...current.days, { date: day.date, meals: day.meals }],
+        };
+      });
     } catch (generateError) {
-      setError(toErrorMessage(generateError));
+      setError(generateError instanceof Error ? generateError.message : 'Unable to generate a meal plan.');
     } finally {
-      setGeneratingDay(false);
+      setGenerating(false);
     }
   }
 
   async function handleSuggestAlternative(slot: MealSlot) {
     if (!currentPlan) return;
-    setAlternativeSlot(slot);
     setError(null);
-    setSuccess(null);
     try {
-      const updatedPlan = await suggestAlternative({
-        date: selectedDate,
-        slot,
-        preferences,
-        currentPlan,
+      const day = await suggestAlternative({ date: selectedDate, slot, preferences, currentPlan });
+      setWeekPlan((current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          days: current.days.map((entry) => (entry.date === day.date ? { date: day.date, meals: day.meals } : entry)),
+        };
       });
-      setWeekDays((current) => current.map((day) => (day.date === updatedPlan.date ? { date: updatedPlan.date, meals: updatedPlan.meals } : day)));
-      setSuccess(`${slot} refreshed.`);
-    } catch (alternativeError) {
-      setError(toErrorMessage(alternativeError));
-    } finally {
-      setAlternativeSlot(null);
+    } catch (suggestError) {
+      setError(suggestError instanceof Error ? suggestError.message : 'Unable to suggest an alternative meal.');
     }
   }
 
-  async function handleSaveFavorite(meal: Meal) {
+  async function handleToggleFavorite(meal: Meal) {
     setError(null);
-    setSuccess(null);
-    setFavoritesLoading(true);
+    const exists = favorites.some((favorite) => favorite.name === meal.name && favorite.slot === meal.slot);
     try {
-      const response = await addFavorite({ meal });
+      const response = exists
+        ? await removeFavorite({ mealName: meal.name, slot: meal.slot })
+        : await addFavorite({ meal });
       setFavorites(response.favorites);
-      setSuccess(`${meal.name} saved to favorites.`);
     } catch (favoriteError) {
-      setError(toErrorMessage(favoriteError));
-    } finally {
-      setFavoritesLoading(false);
+      setError(favoriteError instanceof Error ? favoriteError.message : 'Unable to update favorites.');
     }
-  }
-
-  async function handleRemoveFavorite(meal: Meal) {
-    setError(null);
-    setSuccess(null);
-    setFavoritesLoading(true);
-    try {
-      const response = await removeFavorite({ mealName: meal.name, slot: meal.slot });
-      setFavorites(response.favorites);
-      setSuccess(`${meal.name} removed from favorites.`);
-    } catch (favoriteError) {
-      setError(toErrorMessage(favoriteError));
-    } finally {
-      setFavoritesLoading(false);
-    }
-  }
-
-  function handleReuseFavorite(meal: Meal) {
-    setWeekDays((current) =>
-      current.map((day) =>
-        day.date === selectedDate
-          ? replaceMealInDay(day, { ...meal, slot: selectedReuseSlot })
-          : day,
-      ),
-    );
-    setSuccess(`${meal.name} added to ${selectedReuseSlot}.`);
   }
 
   return (
-    <AppShell>
-      <PlannerHero onGenerate={handleGenerateDay} generating={generatingDay} />
+    <main className="app-shell">
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+        <section className="glass-panel p-6">
+          <p className="text-sm font-semibold text-primary">Kids Daily Meal Planner</p>
+          <h1 className="section-title mt-2 text-3xl">Daily meal planning for busy families</h1>
+          <p className="section-copy mt-2">Save preferences, review the week, generate today’s plan, swap meals, and keep favorites handy.</p>
+          <button className="mt-4 rounded-lg bg-primary px-4 py-2 text-primary-foreground" onClick={handleGenerateDay} disabled={generating}>
+            {generating ? 'Generating…' : 'Generate today’s plan'}
+          </button>
+        </section>
 
-      {error ? (
-        <Card className="mb-6 border-destructive/40 bg-destructive/10">
-          <div className="flex items-start gap-3 text-sm">
-            <AlertCircle className="mt-0.5 h-5 w-5 text-destructive" />
-            <p className="text-foreground">{error}</p>
-          </div>
-        </Card>
-      ) : null}
+        {error ? <section className="mt-6 rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm">{error}</section> : null}
 
-      {success ? (
-        <Card className="mb-6 border-primary/40 bg-primary/10 py-3">
-          <div className="flex items-center gap-2 text-sm text-foreground">
-            <CheckCircle2 className="h-4 w-4 text-primary" />
-            <span>{success}</span>
-          </div>
-        </Card>
-      ) : null}
-
-      {loading ? (
-        <Card className="py-12">
-          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading meal planner...
-          </div>
-        </Card>
-      ) : (
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
-          <div className="space-y-6 min-w-0">
-            <PreferencesPanel
-              preferences={preferences}
-              ageOptions={AGE_OPTIONS}
-              dietaryOptions={DIETARY_OPTIONS}
-              cuisineOptions={CUISINE_OPTIONS}
-              saving={savingPreferences}
-              onChange={setPreferences}
-              onSave={handleSavePreferences}
-            />
-            <WeekCalendar
-              days={weekDays}
-              selectedDate={selectedDate}
-              loading={weekLoading}
-              onSelectDate={setSelectedDate}
-            />
-            <DailyPlanPanel
-              dateLabel={formatLongDateLabel(selectedDate)}
-              plan={selectedDay}
-              loading={generatingDay}
-              alternativeSlot={alternativeSlot}
-              favorites={favorites}
-              onGenerate={handleGenerateDay}
-              onSuggestAlternative={handleSuggestAlternative}
-              onSaveFavorite={handleSaveFavorite}
-              onRemoveFavorite={handleRemoveFavorite}
-            />
-          </div>
-
-          <div className="space-y-6 min-w-0">
-            <Card>
-              <div className="space-y-3">
-                <div>
-                  <h3 className="text-lg font-semibold text-foreground">Reuse favorites</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">Pick a slot, then tap a saved favorite to place it into the current visible plan.</p>
+        <div className="mt-6 grid gap-6 lg:grid-cols-2">
+          <section className="glass-panel p-6">
+            <h2 className="section-title">Preferences</h2>
+            <p className="section-copy mt-1">Set kid count, age range, dietary needs, foods to avoid, and preferred cuisines.</p>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <label className="text-sm">
+                <span className="mb-1 block">Number of kids</span>
+                <input className="w-full rounded-lg border border-border bg-background px-3 py-2" type="number" min={1} value={preferences.numberOfKids} onChange={(event) => setPreferences({ ...preferences, numberOfKids: Number(event.target.value || 1) })} />
+              </label>
+              <label className="text-sm">
+                <span className="mb-1 block">Age range</span>
+                <select className="w-full rounded-lg border border-border bg-background px-3 py-2" value={preferences.ageRange} onChange={(event) => setPreferences({ ...preferences, ageRange: event.target.value })}>
+                  <option value="">Select an age range</option>
+                  {AGE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                </select>
+              </label>
+              <label className="text-sm sm:col-span-2">
+                <span className="mb-1 block">Foods to avoid</span>
+                <textarea className="min-h-24 w-full rounded-lg border border-border bg-background px-3 py-2" value={preferences.foodsToAvoid} onChange={(event) => setPreferences({ ...preferences, foodsToAvoid: event.target.value })} />
+              </label>
+              <div className="sm:col-span-2">
+                <span className="mb-2 block text-sm">Dietary restrictions</span>
+                <div className="flex flex-wrap gap-2">
+                  {DIETARY_OPTIONS.map((option) => {
+                    const checked = preferences.dietaryRestrictions.includes(option);
+                    return (
+                      <button key={option} className="rounded-full border border-border px-3 py-1 text-sm" onClick={() => setPreferences({ ...preferences, dietaryRestrictions: checked ? preferences.dietaryRestrictions.filter((entry) => entry !== option) : [...preferences.dietaryRestrictions, option] })}>
+                        {option}
+                      </button>
+                    );
+                  })}
                 </div>
-                <Select value={selectedReuseSlot} onChange={(event) => setSelectedReuseSlot(event.target.value as MealSlot)} aria-label="Choose slot for favorite reuse">
-                  {SLOT_OPTIONS.map((slot) => (
-                    <option key={slot} value={slot}>{slot}</option>
-                  ))}
-                </Select>
               </div>
-            </Card>
-            <FavoritesPanel
-              favorites={favorites}
-              loading={favoritesLoading}
-              onReuse={handleReuseFavorite}
-              onRemove={handleRemoveFavorite}
-            />
-            {!hasMeals ? null : <Card className="text-sm text-muted-foreground">Viewing plan for <span className="font-medium text-foreground">{formatLongDateLabel(selectedDate)}</span>.</Card>}
-          </div>
+              <div className="sm:col-span-2">
+                <span className="mb-2 block text-sm">Cuisine preferences</span>
+                <div className="flex flex-wrap gap-2">
+                  {CUISINE_OPTIONS.map((option) => {
+                    const checked = preferences.cuisinePreferences.includes(option);
+                    return (
+                      <button key={option} className="rounded-full border border-border px-3 py-1 text-sm" onClick={() => setPreferences({ ...preferences, cuisinePreferences: checked ? preferences.cuisinePreferences.filter((entry) => entry !== option) : [...preferences.cuisinePreferences, option] })}>
+                        {option}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            <button className="mt-4 rounded-lg border border-border px-4 py-2" onClick={handleSavePreferences} disabled={saving}>
+              {saving ? 'Saving…' : 'Save preferences'}
+            </button>
+          </section>
+
+          <section className="glass-panel p-6">
+            <h2 className="section-title">Favorites</h2>
+            <p className="section-copy mt-1">Keep repeatable kid-approved meals in easy reach.</p>
+            <div className="mt-4 space-y-3">
+              {favorites.length === 0 ? <p className="text-sm text-muted-foreground">No favorites yet.</p> : favorites.map((meal) => <div key={`${meal.slot}-${meal.name}`} className="rounded-xl border border-border p-3"><p className="font-medium">{meal.name}</p><p className="text-sm text-muted-foreground">{meal.slot}</p></div>)}
+            </div>
+          </section>
         </div>
-      )}
-    </AppShell>
+
+        <section className="glass-panel mt-6 p-6">
+          <h2 className="section-title">Week overview</h2>
+          <p className="section-copy mt-1">Review major sections of the planner by day.</p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {loading ? <p className="text-sm text-muted-foreground">Loading week plan…</p> : weekPlan?.days.map((day) => <button key={day.date} className="rounded-xl border border-border p-4 text-left" onClick={() => setSelectedDate(day.date)}><p className="font-medium">{formatDateLabel(day.date)}</p><p className="text-sm text-muted-foreground">{day.meals.length} meals</p></button>)}
+          </div>
+        </section>
+
+        <section className="glass-panel mt-6 p-6">
+          <h2 className="section-title">Daily plan</h2>
+          <p className="section-copy mt-1">{formatDateLabel(selectedDate)}</p>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            {MEAL_SLOTS.map((slot) => {
+              const meal = getMealBySlot(currentPlan, slot);
+              const isFavorite = meal ? favorites.some((favorite) => favorite.name === meal.name && favorite.slot === meal.slot) : false;
+              return (
+                <article key={slot} className="rounded-2xl border border-border p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-primary">{slot}</p>
+                      <h3 className="mt-1 font-semibold">{meal?.name ?? `No ${slot.toLowerCase()} selected yet`}</h3>
+                    </div>
+                    <div className="flex gap-2">
+                      <button className="rounded-lg border border-border px-3 py-2 text-sm" onClick={() => handleSuggestAlternative(slot)} disabled={!currentPlan}>Swap</button>
+                      {meal ? <button className="rounded-lg border border-border px-3 py-2 text-sm" onClick={() => handleToggleFavorite(meal)}>{isFavorite ? 'Unfavorite' : 'Favorite'}</button> : null}
+                    </div>
+                  </div>
+                  <p className="mt-3 text-sm text-muted-foreground">{meal?.description ?? 'Generate today’s plan to see meal details here.'}</p>
+                  {meal ? <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-muted-foreground">{meal.ingredients.map((ingredient) => <li key={ingredient}>{ingredient}</li>)}</ul> : null}
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      </div>
+    </main>
   );
 }
