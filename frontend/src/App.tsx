@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Alert } from './components/ui/Alert';
+import { Button } from './components/ui/Button';
 import { AppShell } from './components/layout/AppShell';
 import { DashboardSection } from './components/features/DashboardSection';
 import { ExpenseForm } from './components/features/ExpenseForm';
@@ -14,12 +15,15 @@ function App() {
     loading,
     error,
     actionError,
+    successMessage,
     isSubmitting,
+    deletingExpenseId,
     createExpense,
     updateExpense,
     deleteExpense,
     refreshExpenses,
-    clearActionError
+    clearActionError,
+    clearSuccessMessage
   } = useExpenses();
 
   const [categoryFilter, setCategoryFilter] = useState<'all' | ExpenseCategory>('all');
@@ -62,7 +66,7 @@ function App() {
   };
 
   return (
-    <AppShell onRefresh={refreshExpenses} isRefreshing={loading && expenses.length > 0}>
+    <AppShell onRefresh={refreshExpenses} isRefreshing={loading}>
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="space-y-6">
           {(error || actionError) && (
@@ -70,6 +74,20 @@ function App() {
               <div className="space-y-1">
                 <p className="font-medium">We couldn&apos;t complete that request.</p>
                 <p>{actionError ?? error}</p>
+              </div>
+            </Alert>
+          )}
+
+          {successMessage && (
+            <Alert tone="success">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <p className="font-medium">Action completed</p>
+                  <p>{successMessage}</p>
+                </div>
+                <Button type="button" variant="ghost" size="sm" onClick={clearSuccessMessage}>
+                  Dismiss
+                </Button>
               </div>
             </Alert>
           )}
@@ -97,6 +115,7 @@ function App() {
             expenses={filteredExpenses}
             loading={loading && expenses.length === 0}
             editingExpense={editingExpense}
+            deletingExpenseId={deletingExpenseId}
             onEdit={setEditingExpense}
             onDelete={handleDeleteExpense}
           />

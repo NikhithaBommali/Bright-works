@@ -6,14 +6,14 @@ export type Expense = {
   id: number;
   amount: number;
   category: ExpenseCategory;
-  note: string;
+  note: string | null;
   date: string;
 };
 
 export type ExpensePayload = {
   amount: number;
-  category: string;
-  note: string;
+  category: ExpenseCategory;
+  note: string | null;
   date: string;
 };
 
@@ -53,13 +53,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 function normalizeExpense(expense: Expense): Expense {
   return {
     ...expense,
-    amount: Number(expense.amount ?? 0)
+    amount: Number(expense.amount ?? 0),
+    note: expense.note ?? ''
   };
 }
 
 export async function fetchExpenses(): Promise<Expense[]> {
-  const data = await request<Expense[]>('/api/expenses');
-  return data.map(normalizeExpense);
+  const data = await request<unknown>('/api/expenses');
+
+  if (!Array.isArray(data)) {
+    throw new Error('Malformed API response: expected a bare expenses array.');
+  }
+
+  return data.map((expense) => normalizeExpense(expense as Expense));
 }
 
 export async function createExpense(payload: ExpensePayload): Promise<Expense> {
@@ -78,8 +84,8 @@ export async function updateExpense(expenseId: number, payload: ExpensePayload):
   return normalizeExpense(data);
 }
 
-export async function deleteExpense(expenseId: number): Promise<{ ok: true }> {
-  return request<{ ok: true }>(`/api/expenses/${expenseId}`, {
+export async function deleteExpense(expenseId: number): Promise<void> {
+  await request<void>(`/api/expenses/${expenseId}`, {
     method: 'DELETE',
     headers: {}
   });

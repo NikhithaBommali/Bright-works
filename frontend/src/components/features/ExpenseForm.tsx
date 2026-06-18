@@ -42,7 +42,7 @@ function toFormState(values?: Expense): FormState {
   return {
     amount: String(Number(values.amount ?? 0)),
     category: values.category,
-    note: values.note,
+    note: values.note ?? '',
     date: values.date
   };
 }
