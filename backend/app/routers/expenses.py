@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -64,11 +64,11 @@ async def update_expense(expense_id: int, payload: ExpenseUpdate, db: Session = 
     return expense
 
 
-@router.delete("/{expense_id}")
-async def delete_expense(expense_id: int, db: Session = Depends(get_db)) -> None:
+@router.delete("/{expense_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_expense(expense_id: int, db: Session = Depends(get_db)) -> Response:
     await _ensure_tables(db)
     expense = db.get(Expense, expense_id)
     if expense is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Expense not found")
     db.delete(expense)
-    return None
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
