@@ -2,7 +2,7 @@
 
 Local-development-only FastAPI + React/Vite expense tracker.
 
-**No Docker, deployment configuration, or authentication is required** to run this locally.
+**No Docker, auth, deployment configuration, or external services** are required to run this locally.
 
 ## Quick Start (single machine)
 
@@ -77,3 +77,8 @@ From the repository root:
 ```bash
 pytest -q
 ```
+
+## Notes
+
+- Start the backend first, then the frontend.
+- The frontend uses `VITE_API_BASE_URL` if set; otherwise it falls back to an empty string and calls the backend as relative `/api/...` requests on the same origin.
