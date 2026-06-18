@@ -8,8 +8,8 @@ import { Field } from '../ui/Field';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 
-const AGE_OPTIONS = ['1-3 years', '4-6 years', '7-9 years', '10-12 years'];
-const DIET_OPTIONS = ['None', 'Vegetarian', 'Vegan', 'Gluten-Free', 'Dairy-Free'];
+const AGE_OPTIONS = ['2-5', '6-8', '9-12'];
+const DIET_OPTIONS = ['none', 'vegetarian', 'vegan', 'gluten-free', 'dairy-free'];
 const CUISINE_OPTIONS = ['Italian', 'Mexican', 'Indian', 'Mediterranean', 'American', 'Asian'];
 
 interface PreferencesPanelProps {
@@ -50,14 +50,18 @@ export function PreferencesPanel({ preferences, onChange, onSave, isSaving }: Pr
 
       <div className="space-y-4">
         <Field id="number_of_kids" label="Number of kids" required>
-          <Input
+          <Select
             id="number_of_kids"
-            type="number"
-            min={1}
-            value={preferences.number_of_kids}
-            onChange={handleNumberChange}
+            value={String(preferences.number_of_kids)}
+            onChange={(event) => updateField('number_of_kids', Number(event.target.value))}
             aria-required="true"
-          />
+          >
+            {[1, 2, 3, 4, 5].map((count) => (
+              <option key={count} value={count}>
+                {count}
+              </option>
+            ))}
+          </Select>
         </Field>
 
         <Field id="age_range" label="Age range" required>
@@ -75,11 +79,11 @@ export function PreferencesPanel({ preferences, onChange, onSave, isSaving }: Pr
           </Select>
         </Field>
 
-        <Field id="dietary_restriction" label="Dietary restriction">
+        <Field id="dietary_restrictions" label="Dietary restrictions">
           <Select
-            id="dietary_restriction"
-            value={preferences.dietary_restriction}
-            onChange={(event) => updateField('dietary_restriction', event.target.value)}
+            id="dietary_restrictions"
+            value={preferences.dietary_restrictions}
+            onChange={(event) => updateField('dietary_restrictions', event.target.value)}
           >
             {DIET_OPTIONS.map((option) => (
               <option key={option} value={option}>

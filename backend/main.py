@@ -4,8 +4,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import Base, engine
-from app.routers.contacts import router as contacts_router
-from app.routers.meals import router as meals_router
+from app.routers.meals import favorites_router, router as meals_router
+from app.routers.preferences import preferences_router
 
 
 @asynccontextmanager
@@ -22,4 +22,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.include_router(meals_router, prefix="")
+app.include_router(meals_router)
+app.include_router(preferences_router)
+app.include_router(favorites_router)

@@ -1,40 +1,40 @@
 from __future__ import annotations
 
-import functools
 import json
 import os
 import uuid
 from datetime import date, timedelta
-from pathlib import Path
-from typing import Any, Literal
+from functools import lru_cache
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 from openai import OpenAI
 
 from app.schemas.meal_planner import (
-    DailyPlan,
     DEFAULT_PREFERENCES,
-    FavoriteCreate,
-    FavoriteDelete,
-    FavoriteOut,
+    DeleteFavoriteResponse,
+    DayPlan,
+    FavoriteCreateRequest,
+    FavoriteDeleteRequest,
+    FavoriteItem,
+    FavoritesResponse,
     GenerateDayRequest,
     GenerateDayResponse,
     Meal,
     Preferences,
     SuggestAlternativeRequest,
-    WeekDayResponse,
-    WeekResponse,
+    WeekDayPlan,
+    WeekPlanResponse,
 )
+from app.storage import read_store, update_store
 
 router = APIRouter(prefix="/api", tags=["meal-planner"])
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-PREFERENCES_FILE = DATA_DIR / "preferences.json"
-PLANS_FILE = DATA_DIR / "plans.json"
-FAVORITES_FILE = DATA_DIR / "favorites.json"
+favorites_router = APIRouter(prefix="/api/favorites", tags=["favorites"])
+meal_router = APIRouter(prefix="/api/meals", tags=["meals"])
+MealSlot = Literal["breakfast", "lunch", "snack", "dinner"]
 
 
-@functools.lru_cache(maxsize=1)
+@lru_cache(maxsize=1)
 def _openai_client() -> OpenAI:
     key = os.environ.get("OPENAI_API_KEY")
     if not key:
@@ -42,151 +42,163 @@ def _openai_client() -> OpenAI:
     return OpenAI(api_key=key)
 
 
-def _read_json(path: Path, default: Any) -> Any:
-    if not path.exists():
-        return default
-    return json.loads(path.read_text())
-
-
-def _write_json(path: Path, data: Any) -> None:
-    path.write_text(json.dumps(data, indent=2, sort_keys=True))
-
-
-def _normalize_plan(data: Any) -> DailyPlan:
-    return DailyPlan.model_validate(data)
-
-
-def _meal_prompt(date_value: date, preferences: Preferences, slot: str | None, existing: DailyPlan | None) -> list[dict[str, str]]:
-    system = (
-        "You are a kid-friendly meal planner for families. Return only valid JSON matching the schema. "
-        "Respect restrictive preferences strictly, including vegetarian, vegan, halal, kosher, dairy-free, egg-free, nut-free, gluten-free, and allergy avoidance. "
-        "Avoid any ingredients in foods_to_avoid. Keep descriptions to one sentence."
-    )
-    user = {
-        "date": date_value.isoformat(),
-        "slot": slot,
-        "preferences": preferences.model_dump(),
-        "existing_plan": existing.model_dump() if existing else None,
-        "schema": {
-            "date": "YYYY-MM-DD",
-            "meals": {
-                "breakfast": {"name": "string", "description": "string", "ingredients": ["string"], "prep_time_minutes": 10, "difficulty": "Easy"},
-                "lunch": {"name": "string", "description": "string", "ingredients": ["string"], "prep_time_minutes": 10, "difficulty": "Easy"},
-                "snack": {"name": "string", "description": "string", "ingredients": ["string"], "prep_time_minutes": 10, "difficulty": "Easy"},
-                "dinner": {"name": "string", "description": "string", "ingredients": ["string"], "prep_time_minutes": 10, "difficulty": "Easy"},
-            },
-        },
-    }
-    return [{"role": "system", "content": system}, {"role": "user", "content": json.dumps(user)}]
-
-
-def _generate_plan(date_value: date, preferences: Preferences, slot: str | None = None, existing: DailyPlan | None = None) -> DailyPlan:
+def _generate_meal_plan(prompt: dict[str, Any]) -> dict[str, Any]:
     client = _openai_client()
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         response_format={"type": "json_object"},
-        messages=_meal_prompt(date_value, preferences, slot, existing),
+        messages=[
+            {"role": "system", "content": "Return strict JSON for a kid-friendly meal planner. Use only the requested schema."},
+            {"role": "user", "content": json.dumps(prompt)},
+        ],
     )
-    content = response.choices[0].message.content or ""
-    payload = json.loads(content)
-    if "meals" not in payload and all(slot_name in payload for slot_name in ("breakfast", "lunch", "snack", "dinner")):
-        payload = {"date": date_value.isoformat(), "meals": payload}
-    return GenerateDayResponse.model_validate(payload).meals
+    content = response.choices[0].message.content or "{}"
+    return json.loads(content)
 
 
-def _load_preferences() -> Preferences:
-    stored = _read_json(PREFERENCES_FILE, None)
-    return DEFAULT_PREFERENCES if stored is None else Preferences.model_validate(stored)
+def _meal_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string"},
+            "description": {"type": "string"},
+            "ingredients": {"type": "array", "items": {"type": "string"}},
+            "prep_time_minutes": {"type": "integer"},
+            "difficulty": {"type": "string", "enum": ["Easy", "Medium", "Hard"]},
+        },
+        "required": ["name", "description", "ingredients", "prep_time_minutes", "difficulty"],
+        "additionalProperties": False,
+    }
 
 
-def _save_preferences(preferences: Preferences) -> None:
-    _write_json(PREFERENCES_FILE, preferences.model_dump())
+def _day_plan_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            "breakfast": _meal_schema(),
+            "lunch": _meal_schema(),
+            "snack": _meal_schema(),
+            "dinner": _meal_schema(),
+        },
+        "required": ["breakfast", "lunch", "snack", "dinner"],
+        "additionalProperties": False,
+    }
 
 
-def _load_plans() -> dict[str, dict[str, Any]]:
-    return _read_json(PLANS_FILE, {})
+def _validate_meal(meal: object) -> Meal:
+    return Meal.model_validate(meal)
 
 
-def _save_plans(plans: dict[str, dict[str, Any]]) -> None:
-    _write_json(PLANS_FILE, plans)
+def _validate_day_plan(payload: object, plan_date: date) -> DayPlan:
+    if isinstance(payload, dict) and "meals" not in payload:
+        payload = {"date": plan_date, "meals": payload}
+    return DayPlan.model_validate(payload)
 
 
-def _load_favorites() -> list[dict[str, Any]]:
-    return _read_json(FAVORITES_FILE, [])
-
-
-def _save_favorites(favorites: list[dict[str, Any]]) -> None:
-    _write_json(FAVORITES_FILE, favorites)
+def _fetch_preferences() -> Preferences:
+    store = read_store()
+    raw = store.get("preferences")
+    return Preferences.model_validate(raw) if raw else DEFAULT_PREFERENCES
 
 
 @router.get("/preferences", response_model=Preferences)
 async def get_preferences() -> Preferences:
-    return _load_preferences()
+    return _fetch_preferences()
 
 
 @router.put("/preferences", response_model=Preferences)
 async def put_preferences(body: Preferences) -> Preferences:
-    _save_preferences(body)
-    return body
+    def mutate(store: dict[str, object]) -> Preferences:
+        store["preferences"] = body.model_dump(mode="json")
+        return body
+
+    return update_store(mutate)
 
 
 @router.post("/meals/generate-day", response_model=GenerateDayResponse)
 async def generate_day(body: GenerateDayRequest) -> GenerateDayResponse:
     if not os.environ.get("OPENAI_API_KEY"):
         raise HTTPException(status_code=503, detail="OPENAI_API_KEY is not configured")
-    plan = _generate_plan(body.date, body.preferences)
-    plans = _load_plans()
-    plans[body.date.isoformat()] = plan.model_dump()
-    _save_plans(plans)
-    return GenerateDayResponse(date=body.date, meals=plan)
+    prompt = json.dumps({"date": body.date.isoformat(), "preferences": body.preferences.model_dump(mode="json"), "schema": _day_plan_schema()})
+    payload = _generate_meal_plan(prompt)
+    day_plan = _validate_day_plan(payload, body.date)
+
+    def mutate(store: dict[str, object]) -> GenerateDayResponse:
+        store.setdefault("day_plans", {})[body.date.isoformat()] = day_plan.model_dump(mode="json")
+        return GenerateDayResponse(date=body.date, meals=day_plan.meals)
+
+    return update_store(mutate)
 
 
 @router.post("/meals/suggest-alternative", response_model=GenerateDayResponse)
 async def suggest_alternative(body: SuggestAlternativeRequest) -> GenerateDayResponse:
     if not os.environ.get("OPENAI_API_KEY"):
         raise HTTPException(status_code=503, detail="OPENAI_API_KEY is not configured")
-    plans = _load_plans()
-    existing_raw = plans.get(body.date.isoformat())
-    if existing_raw is None:
-        raise HTTPException(status_code=404, detail="No stored plan for this date")
-    existing = _normalize_plan(existing_raw)
-    regenerated = _generate_plan(body.date, body.preferences, slot=body.slot, existing=existing)
-    updated = existing.model_dump()
-    updated[body.slot] = regenerated.model_dump()[body.slot]
-    plans[body.date.isoformat()] = updated
-    _save_plans(plans)
-    return GenerateDayResponse(date=body.date, meals=DailyPlan.model_validate(updated))
+    prompt = json.dumps(
+        {
+            "date": body.date.isoformat(),
+            "slot": body.slot,
+            "preferences": body.preferences.model_dump(mode="json"),
+            "current_day_plan": body.current_day_plan.model_dump(mode="json"),
+            "schema": {"slot": body.slot, "meal": _meal_schema()},
+        }
+    )
+    payload = _generate_meal_plan(prompt)
+    replacement = payload.get("meal", payload)
+    if body.slot not in payload and isinstance(payload, dict) and all(key in payload for key in ("name", "description", "ingredients", "prep_time_minutes", "difficulty")):
+        replacement = payload
+    meal = _validate_meal(replacement)
+    updated_meals = {**body.current_day_plan.meals, body.slot: meal}
+    updated = DayPlan(date=body.date, meals=updated_meals)
+
+    def mutate(store: dict[str, object]) -> GenerateDayResponse:
+        store.setdefault("day_plans", {})[body.date.isoformat()] = updated.model_dump(mode="json")
+        return GenerateDayResponse(date=body.date, meals=updated.meals)
+
+    return update_store(mutate)
 
 
-@router.get("/week/{date_value}", response_model=WeekResponse)
-async def get_week(date_value: date) -> WeekResponse:
-    week_start = date_value - timedelta(days=date_value.weekday())
-    plans = _load_plans()
-    days = []
+@router.get("/week/{selected_date}", response_model=WeekPlanResponse)
+async def get_week(selected_date: date) -> WeekPlanResponse:
+    store = read_store()
+    plans = store.get("day_plans", {})
+    start = selected_date - timedelta(days=selected_date.weekday())
+    days: list[WeekDayPlan] = []
+    fallback_preferences = _fetch_preferences()
     for offset in range(7):
-        current_date = week_start + timedelta(days=offset)
-        stored = plans.get(current_date.isoformat())
-        days.append(WeekDayResponse(date=current_date, meals=DailyPlan.model_validate(stored) if stored else None))
-    return WeekResponse(week_start=week_start, days=days)
+        current_date = start + timedelta(days=offset)
+        raw = plans.get(current_date.isoformat())
+        if raw:
+            days.append(WeekDayPlan.model_validate(raw))
+        else:
+            generated = _validate_day_plan(
+                _generate_meal_plan(json.dumps({"date": current_date.isoformat(), "preferences": fallback_preferences.model_dump(mode="json"), "schema": _day_plan_schema()})),
+                current_date,
+            )
+            days.append(WeekDayPlan(date=current_date, meals=generated.meals))
+    return WeekPlanResponse(selected_date=selected_date, days=days)
 
 
-@router.get("/favorites", response_model=list[FavoriteOut])
-async def get_favorites() -> list[FavoriteOut]:
-    return [FavoriteOut.model_validate(item) for item in _load_favorites()]
+@router.get("/favorites", response_model=list[FavoriteItem])
+async def get_favorites() -> list[FavoriteItem]:
+    store = read_store()
+    return [FavoriteItem.model_validate(item) for item in store.get("favorites", [])]
 
 
-@router.post("/favorites", response_model=FavoriteOut)
-async def add_favorite(body: FavoriteCreate) -> FavoriteOut:
-    favorite = {"id": str(uuid.uuid4()), "meal": body.meal.model_dump()}
-    favorites = _load_favorites()
-    favorites.append(favorite)
-    _save_favorites(favorites)
-    return FavoriteOut.model_validate(favorite)
+@router.post("/favorites", response_model=FavoriteItem)
+async def add_favorite(body: FavoriteCreateRequest) -> FavoriteItem:
+    item = FavoriteItem(id=str(uuid.uuid4()), meal=body.meal)
+
+    def mutate(store: dict[str, object]) -> FavoriteItem:
+        store.setdefault("favorites", []).append(item.model_dump(mode="json"))
+        return item
+
+    return update_store(mutate)
 
 
-@router.delete("/favorites", response_model=dict)
-async def delete_favorite(body: FavoriteDelete) -> dict[str, Any]:
-    favorites = _load_favorites()
-    remaining = [item for item in favorites if item.get("id") != body.id]
-    _save_favorites(remaining)
-    return {"id": body.id, "deleted": True}
+@router.delete("/favorites", status_code=204)
+async def delete_favorite(id: str) -> None:
+    def mutate(store: dict[str, object]) -> None:
+        store["favorites"] = [favorite for favorite in store.get("favorites", []) if favorite.get("id") != id]
+
+    update_store(mutate)

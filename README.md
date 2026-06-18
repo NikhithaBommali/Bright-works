@@ -128,7 +128,7 @@ Returns the current kid meal preferences.
 {
   "number_of_kids": 1,
   "age_range": "6-8",
-  "dietary_restriction": "none",
+  "dietary_restrictions": ["none"],
   "foods_to_avoid": "",
   "cuisine_preferences": []
 }
@@ -146,7 +146,7 @@ Saves kid meal preferences.
 {
   "number_of_kids": 2,
   "age_range": "6-8",
-  "dietary_restriction": "vegetarian",
+  "dietary_restrictions": ["vegetarian"],
   "foods_to_avoid": "mushrooms, olives",
   "cuisine_preferences": ["Italian"]
 }
@@ -158,7 +158,7 @@ Saves kid meal preferences.
 {
   "number_of_kids": 2,
   "age_range": "6-8",
-  "dietary_restriction": "vegetarian",
+  "dietary_restrictions": ["vegetarian"],
   "foods_to_avoid": "mushrooms, olives",
   "cuisine_preferences": ["Italian"]
 }
@@ -166,9 +166,11 @@ Saves kid meal preferences.
 
 ### POST /api/meals/generate-day
 
-Generates a complete meal plan for a day (Breakfast, Lunch, Snack, Dinner).
+Generates a complete meal plan for a day (Breakfast, Lunch, Snack, Dinner) using OpenAI at request time.
 
 **Auth**: none (public)
+
+> Product constraint: the backend generates meal content at runtime from OpenAI. There is no hardcoded meal catalog and no canned fallback meal arrays.
 
 **Request body**
 
@@ -178,7 +180,7 @@ Generates a complete meal plan for a day (Breakfast, Lunch, Snack, Dinner).
   "preferences": {
     "number_of_kids": 2,
     "age_range": "6-8",
-    "dietary_restriction": "vegetarian",
+    "dietary_restrictions": ["vegetarian"],
     "foods_to_avoid": "mushrooms",
     "cuisine_preferences": ["Italian"]
   }
@@ -224,7 +226,7 @@ Regenerates only one meal slot inside a previously stored day plan.
   "preferences": {
     "number_of_kids": 2,
     "age_range": "6-8",
-    "dietary_restriction": "vegetarian",
+    "dietary_restrictions": ["vegetarian"],
     "foods_to_avoid": "mushrooms",
     "cuisine_preferences": ["Italian"]
   }
