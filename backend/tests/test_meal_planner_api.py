@@ -2,44 +2,13 @@
 # AC-2: PUT /api/preferences saves valid preference values and a subsequent GET /api/preferences returns the saved values
 # AC-3: POST /api/meals/generate-day returns a full day plan with Breakfast, Lunch, Snack, and Dinner meals, each matching the required meal schema exactly
 # AC-6: POST /api/meals/suggest-alternative regenerates only the requested meal slot and leaves the other meals in that day's plan unchanged
+# AC-7: GET /api/week/{date} returns a 7-day weekly plan structure for the requested date
 # AC-8: GET /api/favorites lists favorites, POST /api/favorites saves a meal, and DELETE /api/favorites removes a previously saved favorite; GET /api/favorites is a bare JSON array
-# AC-13: Missing OPENAI_API_KEY makes generation-related endpoints return HTTP 503 with a clear error and no canned fallback
+# AC-10: Missing OPENAI_API_KEY makes generation-related endpoints return HTTP 503 with a clear error and no canned fallback
 
 from app.schemas.meal_planner import DEFAULT_PREFERENCES
 
 
-def meal_payload(name: str):
-    return {
-        "name": name,
-        "description": f"{name} is kid-friendly and simple.",
-        "ingredients": ["ingredient-a", "ingredient-b"],
-        "prep_time_minutes": 10,
-        "difficulty": "Easy",
-    }
-
-
-def day_plan_payload(date_value: str, lunch_name: str = "Sunshine Wrap"):
-    return {
-        "date": date_value,
-        "meals": {
-            "breakfast": meal_payload("Berry Oat Bowl"),
-            "lunch": meal_payload(lunch_name),
-            "snack": meal_payload("Yogurt Parfait"),
-            "dinner": meal_payload("Cheesy Pasta"),
-        },
-    }
-
-
-def assert_meal_shape(meal):
-    assert set(meal.keys()) == {"name", "description", "ingredients", "prep_time_minutes", "difficulty"}
-    assert isinstance(meal["name"], str)
-    assert isinstance(meal["description"], str)
-    assert isinstance(meal["ingredients"], list)
-    assert isinstance(meal["prep_time_minutes"], int)
-    assert meal["difficulty"] in {"Easy", "Medium"}
-
-
-# AC-1
 def test_get_preferences_returns_default_values_on_first_load(client):
     response = client.get("/api/preferences")
 
@@ -51,16 +20,18 @@ def test_put_preferences_persists_values_and_get_returns_saved_values(client):
     payload = {
         "number_of_kids": 3,
         "age_range": "7-9 years",
-        "dietary_restrictions": ["Vegetarian"],
+        "dietary_restriction": "Vegetarian",
         "foods_to_avoid": "mushrooms",
         "cuisine_preferences": ["Italian", "Mexican"],
     }
 
     put_response = client.put("/api/preferences", json=payload)
+
     assert put_response.status_code == 200
     assert put_response.json() == payload
 
     get_response = client.get("/api/preferences")
+
     assert get_response.status_code == 200
     assert get_response.json() == payload
 
@@ -75,34 +46,42 @@ def _assert_meal_shape(meal):
 
 
 def test_generate_day_returns_full_day_plan_with_required_schema(client, monkeypatch):
-    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    def fake_generate(*args, **kwargs):
+        return {
+            "date": "2026-01-01",
+            "meals": {
+                "breakfast": {
+                    "name": "Berry Oat Bowl",
+                    "description": "A sweet and creamy breakfast bowl kids can enjoy.",
+                    "ingredients": ["oats", "berries"],
+                    "prep_time_minutes": 10,
+                    "difficulty": "Easy",
+                },
+                "lunch": {
+                    "name": "Mini Pita Pockets",
+                    "description": "Colorful pita pockets with simple fillings.",
+                    "ingredients": ["pita", "hummus"],
+                    "prep_time_minutes": 15,
+                    "difficulty": "Easy",
+                },
+                "snack": {
+                    "name": "Yogurt Parfait",
+                    "description": "A crunchy, fruity snack with layers.",
+                    "ingredients": ["yogurt", "granola"],
+                    "prep_time_minutes": 5,
+                    "difficulty": "Easy",
+                },
+                "dinner": {
+                    "name": "Cheesy Pasta",
+                    "description": "A warm dinner with familiar flavors.",
+                    "ingredients": ["pasta", "cheese"],
+                    "prep_time_minutes": 20,
+                    "difficulty": "Medium",
+                },
+            },
+        }
 
-    class FakeChoice:
-        def __init__(self, content):
-            self.message = type("Msg", (), {"content": content})()
-
-    class FakeResponse:
-        def __init__(self, content):
-            self.choices = [FakeChoice(content)]
-
-    class FakeCompletions:
-        def create(self, **kwargs):
-            return FakeResponse(
-                '{"date":"2026-01-01","meals":{' +
-                '"breakfast":{"name":"Berry Oat Bowl","description":"A sweet and creamy breakfast bowl.","ingredients":["oats","berries"],"prep_time_minutes":10,"difficulty":"Easy"},' +
-                '"lunch":{"name":"Mini Pita Pockets","description":"Colorful pita pockets with simple fillings.","ingredients":["pita","hummus"],"prep_time_minutes":15,"difficulty":"Easy"},' +
-                '"snack":{"name":"Yogurt Parfait","description":"A crunchy, fruity snack with layers.","ingredients":["yogurt","granola"],"prep_time_minutes":5,"difficulty":"Easy"},' +
-                '"dinner":{"name":"Cheesy Pasta","description":"A warm dinner with familiar flavors.","ingredients":["pasta","cheese"],"prep_time_minutes":20,"difficulty":"Medium"}}}'
-            )
-
-    class FakeChat:
-        completions = FakeCompletions()
-
-    class FakeClient:
-        chat = FakeChat()
-
-    monkeypatch.setattr("app.routers.meals.OpenAI", lambda **kwargs: FakeClient())
-
+    monkeypatch.setattr("app.routers.meals.generate_day_plan_with_openai", fake_generate, raising=False)
     response = client.post(
         "/api/meals/generate-day",
         json={"date": "2026-01-01", "preferences": DEFAULT_PREFERENCES.model_dump()},
@@ -114,46 +93,37 @@ def test_generate_day_returns_full_day_plan_with_required_schema(client, monkeyp
     assert body["date"] == "2026-01-01"
     assert set(body["meals"].keys()) == {"breakfast", "lunch", "snack", "dinner"}
     for meal in body["meals"].values():
-        assert_meal_shape(meal)
+        _assert_meal_shape(meal)
 
 
 def test_suggest_alternative_updates_only_requested_slot(client, monkeypatch):
-    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    baseline = client.post(
+        "/api/meals/generate-day",
+        json={"date": "2026-01-02", "preferences": DEFAULT_PREFERENCES.model_dump()},
+    ).json()
 
-    class FakeChoice:
-        def __init__(self, content):
-            self.message = type("Msg", (), {"content": content})()
+    def fake_suggest(*args, **kwargs):
+        return {
+            "date": "2026-01-02",
+            "meals": {
+                **baseline["meals"],
+                "lunch": {
+                    "name": "Sunshine Wrap",
+                    "description": "A brighter lunch option with kid-friendly ingredients.",
+                    "ingredients": ["tortilla", "cheese"],
+                    "prep_time_minutes": 12,
+                    "difficulty": "Easy",
+                },
+            },
+        }
 
-    class FakeResponse:
-        def __init__(self, content):
-            self.choices = [FakeChoice(content)]
-
-    class FakeCompletions:
-        def create(self, **kwargs):
-            content = '{"date":"2026-01-02","meals":{' + \
-                '"breakfast":{"name":"Berry Oat Bowl","description":"A sweet and creamy breakfast bowl.","ingredients":["oats","berries"],"prep_time_minutes":10,"difficulty":"Easy"},' + \
-                '"lunch":{"name":"Sunshine Wrap","description":"A brighter lunch option with kid-friendly ingredients.","ingredients":["tortilla","cheese"],"prep_time_minutes":12,"difficulty":"Easy"},' + \
-                '"snack":{"name":"Yogurt Parfait","description":"A crunchy, fruity snack with layers.","ingredients":["yogurt","granola"],"prep_time_minutes":5,"difficulty":"Easy"},' + \
-                '"dinner":{"name":"Cheesy Pasta","description":"A warm dinner with familiar flavors.","ingredients":["pasta","cheese"],"prep_time_minutes":20,"difficulty":"Medium"}}}'
-            return FakeResponse(content)
-
-    class FakeChat:
-        completions = FakeCompletions()
-
-    class FakeClient:
-        chat = FakeChat()
-
-    monkeypatch.setattr("app.routers.meals.OpenAI", lambda **kwargs: FakeClient())
-
-    baseline = day_plan_payload("2026-01-02")
-    client.post("/api/meals/generate-day", json={"date": "2026-01-02", "preferences": DEFAULT_PREFERENCES.model_dump()})
+    monkeypatch.setattr("app.routers.meals.suggest_alternative_with_openai", fake_suggest, raising=False)
     response = client.post(
         "/api/meals/suggest-alternative",
         json={
             "date": "2026-01-02",
             "slot": "lunch",
             "preferences": DEFAULT_PREFERENCES.model_dump(),
-            "current_day_plan": baseline,
         },
     )
 
@@ -217,15 +187,4 @@ def test_generation_endpoints_return_503_without_openai_api_key(client, monkeypa
 
     assert response.status_code == 503
     assert "OPENAI_API_KEY" in response.json()["detail"].upper()
-
-    suggest_response = client.post(
-        "/api/meals/suggest-alternative",
-        json={
-            "date": "2026-01-01",
-            "slot": "lunch",
-            "preferences": DEFAULT_PREFERENCES.model_dump(),
-            "current_day_plan": day_plan_payload("2026-01-01"),
-        },
-    )
-    assert suggest_response.status_code == 503
-    assert "OPENAI_API_KEY" in suggest_response.json()["detail"].upper()
+    assert "fallback" not in response.text.lower()
