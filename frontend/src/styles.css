@@ -1,5 +1,2 @@
-@layer components {
-  .app-shell {
-    @apply min-h-screen bg-background text-foreground;
-  }
-}
+/* Tailwind component-layer styles were consolidated into src/index.css.
+ */

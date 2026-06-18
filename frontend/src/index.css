@@ -99,4 +99,8 @@
   .section-copy {
     @apply text-sm leading-6 text-muted-foreground;
   }
+
+  .app-shell {
+    @apply min-h-screen bg-background text-foreground;
+  }
 }
