@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AlertCircle, Loader2, Save } from 'lucide-react';
 import type { Contact, ContactPayload } from '../../api-client/contacts';
 import { Button } from '../ui/Button';
@@ -49,7 +49,7 @@ export function ContactForm({ mode, initialValue, onSubmit, onCancel, submitting
   const [errors, setErrors] = useState<Partial<Record<keyof FormValues, string>>>({});
   const [formError, setFormError] = useState<string | null>(null);
 
-  useMemo(() => {
+  useEffect(() => {
     setValues(toFormValues(initialValue));
     setErrors({});
     setFormError(null);

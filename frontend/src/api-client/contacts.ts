@@ -35,7 +35,7 @@ type ValidationDetail = {
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(path, {
     headers: {
       'Content-Type': 'application/json',
       ...(init?.headers ?? {}),
@@ -80,29 +80,29 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export async function fetchContacts(search?: string): Promise<Contact[]> {
   const query = search ? `?search=${encodeURIComponent(search)}` : '';
-  return request<Contact[]>(`/api/contacts${query}`);
+  return request<Contact[]>(`${API_BASE}/api/contacts${query}`);
 }
 
 export async function fetchContact(contactId: number): Promise<Contact> {
-  return request<Contact>(`/api/contacts/${contactId}`);
+  return request<Contact>(`${API_BASE}/api/contacts/${contactId}`);
 }
 
 export async function createContact(payload: ContactPayload): Promise<Contact> {
-  return request<Contact>('/api/contacts', {
+  return request<Contact>(`${API_BASE}/api/contacts`, {
     method: 'POST',
     body: JSON.stringify(payload),
   });
 }
 
 export async function updateContact(contactId: number, payload: ContactPayload): Promise<Contact> {
-  return request<Contact>(`/api/contacts/${contactId}`, {
+  return request<Contact>(`${API_BASE}/api/contacts/${contactId}`, {
     method: 'PUT',
     body: JSON.stringify(payload),
   });
 }
 
-export async function deleteContact(contactId: number): Promise<void> {
-  await request<void>(`/api/contacts/${contactId}`, {
+export async function deleteContact(contactId: number): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`${API_BASE}/api/contacts/${contactId}`, {
     method: 'DELETE',
   });
 }

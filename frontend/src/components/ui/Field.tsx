@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import type { ReactElement, ReactNode } from 'react';
+import { cloneElement, isValidElement } from 'react';
 import { cn } from '../../utils/cn';
 
 interface FieldProps {
@@ -12,13 +13,18 @@ interface FieldProps {
 
 export function Field({ id, label, required = false, error, hint, children }: FieldProps) {
   const describedBy = [hint ? `${id}-hint` : null, error ? `${id}-error` : null].filter(Boolean).join(' ');
+  const child = isValidElement(children)
+    ? cloneElement(children as ReactElement<Record<string, unknown>>, {
+        'aria-describedby': describedBy || undefined,
+      })
+    : children;
 
   return (
     <div className="space-y-2">
       <label htmlFor={id} className="text-sm font-medium text-foreground">
         {label} {required ? <span className="text-destructive">*</span> : null}
       </label>
-      {children}
+      {child}
       {hint ? (
         <p id={`${id}-hint`} className="text-xs text-muted-foreground">
           {hint}
@@ -29,7 +35,6 @@ export function Field({ id, label, required = false, error, hint, children }: Fi
           {error}
         </p>
       ) : null}
-      {describedBy ? <span className="sr-only">{describedBy}</span> : null}
     </div>
   );
 }
