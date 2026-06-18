@@ -235,7 +235,7 @@ export default function App() {
       />
       <WeeklyPlanner
         weekStart={weekPlan.week_start || selectedDate}
-        days={weekPlan.days}
+        days={weekPlan.days.length ? weekPlan.days : [{ date: selectedDate, meals: selectedMeals }]}
         selectedDate={selectedDate}
         onSelectDate={handleSelectDay}
       />
@@ -245,12 +245,12 @@ export default function App() {
 
   let content = null;
 
+  const plannerBusy = isGenerating || suggestingSlot !== null;
+
   if (isBootstrapping) {
     content = <MealCardsSkeleton />;
   } else if (bootstrapError) {
     content = <PlannerError message={bootstrapError} onRetry={() => window.location.reload()} disabled={false} />;
-  } else if (isGenerating) {
-    content = <MealCardsSkeleton />;
   } else if (generationError) {
     content = <PlannerError message={generationError} onRetry={() => void handleGenerate()} disabled={isGenerating} />;
   } else if (!selectedMeals) {
@@ -266,14 +266,15 @@ export default function App() {
             </div>
             <Button
               onClick={() => void handleGenerate(selectedDate)}
-              disabled={isGenerating || suggestingSlot !== null}
-              aria-disabled={isGenerating || suggestingSlot !== null}
+              disabled={plannerBusy}
+              aria-disabled={plannerBusy}
               iconLeft={isGenerating ? <LoaderCircle className="h-4 w-4 animate-spin" /> : undefined}
             >
               {isGenerating ? 'Generating meals...' : 'Generate today\'s plan'}
             </Button>
           </div>
         </Card>
+        {isGenerating ? <MealCardsSkeleton /> : null}
         {mealEntries.map(([slot, meal]) => {
           const favorite = favorites.find((item) => item.meal.name === meal.name && item.meal.description === meal.description);
           const isFavoritePending = pendingFavoriteName === meal.name || pendingFavoriteId === favorite?.id;
