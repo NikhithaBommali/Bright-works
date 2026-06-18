@@ -3,7 +3,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 
 class ContactBase(BaseModel):
     name: str
-    email: EmailStr | None = None
+    email: str | None = None
     phone: str | None = None
     company: str | None = None
     notes: str | None = None
@@ -11,9 +11,18 @@ class ContactBase(BaseModel):
     @field_validator("name")
     @classmethod
     def validate_name(cls, value: str) -> str:
-        if not value or not value.strip():
+        value = value.strip()
+        if not value:
             raise ValueError("name must be non-empty")
-        return value.strip()
+        return value
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        EmailStr(value)
+        return value
 
 
 class ContactCreate(ContactBase):
