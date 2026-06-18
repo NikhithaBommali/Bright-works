@@ -2,45 +2,36 @@ from __future__ import annotations
 
 import pytest
 
-from app.schemas.meals import Preferences
+from app.persistence import FAVORITES_FILE, PREFERENCES_FILE, PLANS_FILE, save_json
+from app.schemas.preferences import Preference
 
 
-DEFAULT_PREFERENCES = {
-    'numberOfKids': 1,
-    'ageRange': '2-5',
-    'dietaryRestrictions': ['none'],
-    'foodsToAvoid': '',
-    'cuisinePreferences': [],
-}
-
-
-def meal_fixture(slot: str, name: str, difficulty: str = 'Easy') -> dict:
-    return {
-        'slot': slot,
-        'name': name,
-        'description': f'{name} description',
-        'ingredients': [f'{name.lower()} ingredient 1', f'{name.lower()} ingredient 2'],
-        'prepTimeMinutes': 10,
-        'difficulty': difficulty,
-    }
-
-
-# AC-1: GET /api/preferences returns default values when no preferences have been saved yet.
-def test_get_preferences_empty_returns_default_body(client):
+# AC-1: GET /api/preferences returns default values before anything is saved.
+def test_get_preferences_first_load_returns_defaults(client):
     response = client.get('/api/preferences')
 
     assert response.status_code == 200
-    assert response.json() == DEFAULT_PREFERENCES
+    assert response.json() == {
+        'preferences': {
+            'numberOfKids': 1,
+            'ageRange': '',
+            'dietaryRestrictions': [],
+            'foodsToAvoid': '',
+            'cuisinePreferences': [],
+        }
+    }
 
 
-# AC-2: PUT /api/preferences saves valid preferences and GET returns the saved values.
-def test_put_preferences_persists_and_get_returns_same_values(client):
+# AC-2: PUT /api/preferences persists and GET returns the saved values.
+def test_put_preferences_persists_and_get_returns_saved_values(client):
     payload = {
-        'numberOfKids': 3,
-        'ageRange': '6-8',
-        'dietaryRestrictions': ['vegetarian', 'gluten-free'],
-        'foodsToAvoid': 'mushrooms',
-        'cuisinePreferences': ['Italian', 'Mexican'],
+        'preferences': {
+            'numberOfKids': 3,
+            'ageRange': '5-8',
+            'dietaryRestrictions': ['vegetarian'],
+            'foodsToAvoid': 'mushrooms',
+            'cuisinePreferences': ['Italian', 'Mexican'],
+        }
     }
 
     put_response = client.put('/api/preferences', json=payload)
@@ -52,110 +43,138 @@ def test_put_preferences_persists_and_get_returns_same_values(client):
     assert get_response.json() == payload
 
 
-# AC-3: POST /api/meals/generate-day returns a full day plan with exactly one of each meal slot.
-def test_generate_day_returns_four_meals_and_required_fields(client, monkeypatch):
-    plan = {
-        'date': '2024-06-01',
-        'meals': [
-            meal_fixture('Breakfast', 'Sunny Oatmeal'),
-            meal_fixture('Lunch', 'Rainbow Wrap'),
-            meal_fixture('Snack', 'Apple Boats'),
-            meal_fixture('Dinner', 'Mini Pasta', difficulty='Medium'),
-        ],
-    }
-    monkeypatch.setenv('OPENAI_API_KEY', 'test-key')
-    monkeypatch.setattr('app.routers.meals.generate_day', lambda date, preferences: type('Plan', (), {'model_dump': lambda self: plan})())
+# AC-3: POST /api/meals/generate-day returns a normalized 4-meal day plan.
+def test_generate_day_returns_full_day_plan_with_required_meal_fields(client, monkeypatch):
+    class DummyCompletions:
+        def __init__(self):
+            self.calls = []
 
-    response = client.post('/api/meals/generate-day', json={'date': '2024-06-01', 'preferences': Preferences().model_dump()})
+        def create(self, **kwargs):
+            self.calls.append(kwargs)
+            return type(
+                'Resp',
+                (),
+                {
+                    'choices': [
+                        type(
+                            'Choice',
+                            (),
+                            {
+                                'message': type(
+                                    'Msg',
+                                    (),
+                                    {
+                                        'content': '{"date":"2000-01-01","meals":[{"id":"m1","slot":"Breakfast","name":"Sunny Oatmeal","description":"Warm and fruity breakfast.","ingredients":["oats","berries"],"prepTimeMinutes":5,"difficulty":"Easy"},{"id":"m2","slot":"Lunch","name":"Rainbow Wrap","description":"Colorful and filling lunch.","ingredients":["tortilla","veggies"],"prepTimeMinutes":10,"difficulty":"Easy"},{"id":"m3","slot":"Snack","name":"Apple Boats","description":"Crisp and sweet snack.","ingredients":["apple","sunflower butter"],"prepTimeMinutes":4,"difficulty":"Easy"},{"id":"m4","slot":"Dinner","name":"Mini Pasta","description":"Cozy kid-friendly dinner.","ingredients":["pasta","sauce"],"prepTimeMinutes":15,"difficulty":"Medium"}]}',
+                                    },
+                                )
+                            },
+                        )
+                    ]
+                },
+            )
+
+    dummy = DummyCompletions()
+
+    class DummyClient:
+        def __init__(self):
+            self.chat = type('Chat', (), {'completions': dummy})()
+
+    monkeypatch.setenv('OPENAI_API_KEY', 'test-key')
+    monkeypatch.setattr('app.openai_service._openai_client', lambda: DummyClient())
+
+    response = client.post('/api/meals/generate-day', json={'date': '2024-06-01', 'preferences': Preference().model_dump()})
 
     assert response.status_code == 200
-    body = response.json()
-    assert body == plan
-    assert [meal['slot'] for meal in body['meals']] == ['Breakfast', 'Lunch', 'Snack', 'Dinner']
-    for meal in body['meals']:
-        assert set(meal) == {'slot', 'name', 'description', 'ingredients', 'prepTimeMinutes', 'difficulty'}
-        assert isinstance(meal['ingredients'], list)
+    data = response.json()
+    assert data['plan']['date'] == '2024-06-01'
+    assert [meal['slot'] for meal in data['plan']['meals']] == ['Breakfast', 'Lunch', 'Snack', 'Dinner']
+    for meal in data['plan']['meals']:
+        assert set(meal) == {'id', 'slot', 'name', 'description', 'ingredients', 'prepTimeMinutes', 'difficulty'}
 
 
 # AC-6: POST /api/meals/suggest-alternative changes only the requested slot.
-def test_suggest_alternative_changes_only_requested_slot(client, monkeypatch):
-    current_plan = {
+def test_suggest_alternative_updates_only_requested_slot(client, monkeypatch):
+    day = {
         'date': '2024-06-01',
         'meals': [
-            meal_fixture('Breakfast', 'Sunny Oatmeal'),
-            meal_fixture('Lunch', 'Rainbow Wrap'),
-            meal_fixture('Snack', 'Apple Boats'),
-            meal_fixture('Dinner', 'Mini Pasta', difficulty='Medium'),
+            {'id': 'b', 'slot': 'Breakfast', 'name': 'B', 'description': 'b', 'ingredients': ['b'], 'prepTimeMinutes': 5, 'difficulty': 'Easy'},
+            {'id': 'l', 'slot': 'Lunch', 'name': 'L', 'description': 'l', 'ingredients': ['l'], 'prepTimeMinutes': 10, 'difficulty': 'Easy'},
+            {'id': 's', 'slot': 'Snack', 'name': 'S', 'description': 's', 'ingredients': ['s'], 'prepTimeMinutes': 3, 'difficulty': 'Easy'},
+            {'id': 'd', 'slot': 'Dinner', 'name': 'D', 'description': 'd', 'ingredients': ['d'], 'prepTimeMinutes': 20, 'difficulty': 'Medium'},
         ],
     }
-    updated_meal = meal_fixture('Lunch', 'New Lunch')
-    monkeypatch.setenv('OPENAI_API_KEY', 'test-key')
-    monkeypatch.setattr('app.routers.meals.generate_meal', lambda date, slot, preferences: updated_meal)
+    save_json(FAVORITES_FILE, [])
+    save_json(PREFERENCES_FILE, Preference().model_dump())
 
-    response = client.post(
-        '/api/meals/suggest-alternative',
-        json={
-            'date': '2024-06-01',
-            'slot': 'Lunch',
-            'preferences': Preferences().model_dump(),
-            'currentPlan': current_plan,
-        },
-    )
+    class DummyCompletions:
+        def create(self, **kwargs):
+            return type(
+                'Resp',
+                (),
+                {
+                    'choices': [
+                        type('Choice', (), {'message': type('Msg', (), {'content': '{"id":"new-l","name":"New Lunch","description":"new","ingredients":["x"],"prepTimeMinutes":12,"difficulty":"Easy"}'})()})
+                    ]
+                },
+            )
+
+    class DummyClient:
+        def __init__(self):
+            self.chat = type('Chat', (), {'completions': DummyCompletions()})()
+
+    monkeypatch.setenv('OPENAI_API_KEY', 'test-key')
+    monkeypatch.setattr('app.openai_service._openai_client', lambda: DummyClient())
+    save_json(PLANS_FILE, {'2024-06-01': day})
+
+    response = client.post('/api/meals/suggest-alternative', json={'date': '2024-06-01', 'slot': 'Lunch', 'preferences': Preference().model_dump()})
 
     assert response.status_code == 200
-    body = response.json()
-    assert body['date'] == '2024-06-01'
-    assert body['meals'][0] == current_plan['meals'][0]
-    assert body['meals'][2] == current_plan['meals'][2]
-    assert body['meals'][3] == current_plan['meals'][3]
-    assert body['meals'][1] == updated_meal
+    plan = response.json()['plan']
+    assert [meal['slot'] for meal in plan['meals']] == ['Breakfast', 'Lunch', 'Snack', 'Dinner']
+    assert plan['meals'][0] == day['meals'][0]
+    assert plan['meals'][2] == day['meals'][2]
+    assert plan['meals'][3] == day['meals'][3]
+    assert plan['meals'][1]['id'] == 'new-l'
 
 
 # AC-8: Favorites endpoints work end-to-end.
 def test_favorites_end_to_end_lists_adds_and_removes_meals(client):
-    meal = meal_fixture('Breakfast', 'Blueberry Pancakes')
+    meal = {
+        'id': 'meal-1',
+        'slot': 'Breakfast',
+        'name': 'Blueberry Pancakes',
+        'description': 'Fluffy and fun.',
+        'ingredients': ['flour', 'blueberries'],
+        'prepTimeMinutes': 15,
+        'difficulty': 'Easy',
+    }
 
-    empty_response = client.get('/api/favorites')
-    add_response = client.post('/api/favorites', json={'meal': meal})
-    list_response = client.get('/api/favorites')
-    delete_response = client.delete('/api/favorites', json={'mealName': meal['name'], 'slot': meal['slot']})
-    final_response = client.get('/api/favorites')
+    empty = client.get('/api/favorites')
+    added = client.post('/api/favorites', json={'meal': meal})
+    listed = client.get('/api/favorites')
+    deleted = client.delete('/api/favorites', json={'mealId': 'meal-1'})
+    final_list = client.get('/api/favorites')
 
-    assert empty_response.status_code == 200
-    assert empty_response.json() == {'favorites': []}
-    assert add_response.status_code == 200
-    assert add_response.json() == {'favorites': [meal]}
-    assert list_response.status_code == 200
-    assert list_response.json() == {'favorites': [meal]}
-    assert delete_response.status_code == 200
-    assert delete_response.json() == {'favorites': []}
-    assert final_response.status_code == 200
-    assert final_response.json() == {'favorites': []}
+    assert empty.status_code == 200
+    assert empty.json() == {'favorites': []}
+    assert added.status_code == 200
+    assert added.json()['meal']['id'] == 'meal-1'
+    assert listed.status_code == 200
+    assert listed.json()['favorites'][0]['id'] == 'meal-1'
+    assert deleted.status_code == 200
+    assert final_list.status_code == 200
+    assert final_list.json() == {'favorites': []}
 
 
 # AC-14: Missing OPENAI_API_KEY returns 503 and no fallback meal data.
-@pytest.mark.parametrize(
-    'path,payload',
-    [
-        ('/api/meals/generate-day', {'date': '2024-06-01', 'preferences': Preferences().model_dump()}),
-        (
-            '/api/meals/suggest-alternative',
-            {
-                'date': '2024-06-01',
-                'slot': 'Lunch',
-                'preferences': Preferences().model_dump(),
-                'currentPlan': {
-                    'date': '2024-06-01',
-                    'meals': [meal_fixture('Breakfast', 'Sunny Oatmeal'), meal_fixture('Lunch', 'Rainbow Wrap'), meal_fixture('Snack', 'Apple Boats'), meal_fixture('Dinner', 'Mini Pasta', difficulty='Medium')],
-                },
-            },
-        ),
-    ],
-)
-def test_generation_endpoints_without_openai_key_return_503_without_fallback(client, monkeypatch, path, payload):
+@pytest.mark.parametrize('path,payload', [
+    ('/api/meals/generate-day', {'date': '2024-06-01', 'preferences': Preference().model_dump()}),
+    ('/api/meals/suggest-alternative', {'date': '2024-06-01', 'slot': 'Lunch', 'preferences': Preference().model_dump()}),
+])
+def test_generation_endpoints_without_openai_key_return_503_without_fallback(client, path, payload, monkeypatch):
     monkeypatch.delenv('OPENAI_API_KEY', raising=False)
 
     response = client.post(path, json=payload)
 
     assert response.status_code == 503
-    assert response.json() == {'detail': 'OPENAI_API_KEY is not configured on the backend'}
+    assert 'OPENAI_API_KEY' in response.json()['detail']

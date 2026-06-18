@@ -3,14 +3,13 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'backend'))
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import main
-from app.meal_store import DATA_DIR, FAVORITES_FILE, PREFERENCES_FILE, PLANS_FILE
+from app.persistence import DATA_DIR, FAVORITES_FILE, PREFERENCES_FILE, PLANS_FILE
 
 
 @pytest.fixture(autouse=True)
