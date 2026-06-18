@@ -18,7 +18,7 @@ from app.schemas.expense import ExpenseCreate, ExpenseOut, ExpenseUpdate
 #   request:  {"amount": float, "category": "food|transport|shopping|other", "note": str?, "date": "YYYY-MM-DD"}
 #   response: {"id": int, "amount": float, "category": "food|transport|shopping|other", "note": str, "date": "YYYY-MM-DD"}
 # DELETE /api/expenses/{id}
-#   response: {"ok": true}
+#   response: 204 No Content
 
 router = APIRouter(prefix="/api/expenses", tags=["expenses"])
 
@@ -65,10 +65,10 @@ async def update_expense(expense_id: int, payload: ExpenseUpdate, db: Session = 
 
 
 @router.delete("/{expense_id}")
-async def delete_expense(expense_id: int, db: Session = Depends(get_db)) -> dict[str, bool]:
+async def delete_expense(expense_id: int, db: Session = Depends(get_db)) -> None:
     await _ensure_tables(db)
     expense = db.get(Expense, expense_id)
     if expense is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Expense not found")
     db.delete(expense)
-    return {"ok": True}
+    return None

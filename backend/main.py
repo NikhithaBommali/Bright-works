@@ -17,14 +17,9 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["*"],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 app.include_router(expenses.router)
-
-
-@app.on_event("startup")
-def _startup() -> None:
-    Base.metadata.create_all(bind=engine)
