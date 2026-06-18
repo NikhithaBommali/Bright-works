@@ -4,38 +4,9 @@ from httpx import AsyncClient
 import pytest
 
 
-# AC-1: Creating an expense with a positive amount, valid category, optional note, and date stores the record and makes it appear in GET /api/expenses results.
+# AC-3: The backend rejects create requests with amount less than or equal to 0 with a client-error response.
 @pytest.mark.asyncio
-async def test_post_expenses_with_valid_payload_succeeds_and_persists_in_get_results(client: AsyncClient):
-    payload = {
-        "amount": 12.5,
-        "category": "food",
-        "note": "Lunch",
-        "date": "2026-06-18",
-    }
-
-    create_response = await client.post("/api/expenses", json=payload)
-
-    assert create_response.status_code == 201
-    created = create_response.json()
-    assert set(created.keys()) == {"id", "amount", "category", "note", "date"}
-    assert isinstance(created["id"], int)
-    assert created["amount"] == payload["amount"]
-    assert created["category"] == payload["category"]
-    assert created["note"] == payload["note"]
-    assert created["date"] == payload["date"]
-
-    get_response = await client.get("/api/expenses")
-
-    assert get_response.status_code == 200
-    data = get_response.json()
-    assert isinstance(data, list)
-    assert data == [created]
-
-
-# AC-2: Submitting amount <= 0 to POST /api/expenses is rejected by the backend with a client-error response.
-@pytest.mark.asyncio
-@pytest.mark.parametrize("amount", [0, -1])
+@pytest.mark.parametrize("amount", [0, -1, -25.5])
 async def test_post_expenses_with_non_positive_amount_returns_client_error(client: AsyncClient, amount: float):
     response = await client.post(
         "/api/expenses",
@@ -47,17 +18,57 @@ async def test_post_expenses_with_non_positive_amount_returns_client_error(clien
         },
     )
 
-    assert 400 <= response.status_code < 500
+    assert response.status_code == 422
 
 
-# AC-3: GET /api/expenses returns a bare JSON array of expense objects rather than a wrapped object.
+# AC-4: GET /api/expenses returns a bare JSON array of expense objects.
 @pytest.mark.asyncio
-async def test_get_expenses_returns_bare_array_not_wrapped_object(client: AsyncClient):
+async def test_get_expenses_returns_bare_json_array(client: AsyncClient):
+    create_response = await client.post(
+        "/api/expenses",
+        json={
+            "amount": 12.5,
+            "category": "food",
+            "note": "Lunch",
+            "date": "2026-06-18",
+        },
+    )
+    assert create_response.status_code == 201
+
     response = await client.get("/api/expenses")
 
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
+    assert not isinstance(data, dict)
+    assert len(data) == 1
+    assert set(data[0].keys()) == {"id", "amount", "category", "note", "date"}
+    assert data[0]["amount"] == 12.5
+    assert data[0]["category"] == "food"
+    assert data[0]["note"] == "Lunch"
+    assert data[0]["date"] == "2026-06-18"
+
+
+# AC-1: User can create an expense with amount, category, note, and date, and the new expense appears in the expense list after a successful save.
+@pytest.mark.asyncio
+async def test_post_expenses_with_valid_payload_succeeds(client: AsyncClient):
+    payload = {
+        "amount": 18.75,
+        "category": "transport",
+        "note": "Train fare",
+        "date": "2026-06-18",
+    }
+
+    response = await client.post("/api/expenses", json=payload)
+
+    assert response.status_code == 201
+    data = response.json()
+    assert set(data.keys()) == {"id", "amount", "category", "note", "date"}
+    assert isinstance(data["id"], int)
+    assert data["amount"] == payload["amount"]
+    assert data["category"] == payload["category"]
+    assert data["note"] == payload["note"]
+    assert data["date"] == payload["date"]
 
 
 # AC-1: User can create an expense with amount, category, note, and date, and the new expense appears in the expense list after a successful save.
