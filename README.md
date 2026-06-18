@@ -1,62 +1,79 @@
-# Bright-works
+# SpendLog (Bright-works)
 
-TaskFlow is a small FastAPI + React/Vite app for managing tasks.
+Local-development-only FastAPI + React/Vite expense tracker.
 
-## Local setup
+**No Docker, deployment configuration, or authentication is required** to run this locally.
 
-### Backend
+## Quick Start (single machine)
 
-Install Python dependencies:
+### 1) Start the FastAPI backend
+
+Install backend dependencies:
 
 ```bash
+cd backend
 python -m pip install -r requirements.txt
 ```
 
-Start the FastAPI server:
+Run the FastAPI app:
 
 ```bash
-uvicorn main:app --host 0.0.0.0 --port 8000
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-The backend uses SQLite for local persistence. On startup, the app creates the database file at `taskflow.db` inside `BW_DATA_DIR` and initializes the `tasks` table if it does not already exist. If `BW_DATA_DIR` is not set, the default is `/app/data`.
+SQLite persistence (local):
 
-### Frontend
+- The backend stores data in `spendlog.db`.
+- The directory is controlled by `BW_DATA_DIR`.
+- Default `BW_DATA_DIR`: `./data`.
 
-Install Node dependencies:
+See `backend/.env.example` for the default value.
+
+### 2) Start the Vite frontend
+
+Install frontend dependencies:
 
 ```bash
+cd frontend
 npm install
 ```
 
-Start the Vite development server:
+Run the Vite dev server:
 
 ```bash
 npm run dev
 ```
 
-To preview a built frontend locally, run:
+### 3) Optional: set `VITE_API_BASE_URL`
 
-```bash
-npm run build
-npm run preview
-```
-
-## Frontend API configuration
-
-The frontend API client uses:
+The frontend resolves its API base URL from:
 
 ```ts
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 ```
 
-All requests go to `${API_BASE}/api/...`.
+It sends requests to `${API_BASE}/api/...`.
 
-For local development against a separately running backend, set `VITE_API_BASE_URL` to the backend origin, for example:
+- If `VITE_API_BASE_URL` is **set** (recommended when backend and frontend are on different origins), requests go to `${VITE_API_BASE_URL}/api/...`.
+- If it is **not set**, the frontend uses `""` and keeps requests relative (requests go to `/api/...` on the same origin).
+
+Example (Linux/macOS):
 
 ```bash
-VITE_API_BASE_URL=http://localhost:8000
+# from the frontend/ directory
+VITE_API_BASE_URL=http://localhost:8000 npm run dev
 ```
 
-With that value set, the frontend calls `http://localhost:8000/api/...`.
+Example (Windows PowerShell):
 
-If `VITE_API_BASE_URL` is not set, the empty-string fallback keeps requests relative, which supports preview deployments where `/api/...` is served from the same origin.
+```powershell
+$env:VITE_API_BASE_URL="http://localhost:8000"; npm run dev
+```
+
+## Run tests (backend)
+
+From the repository root:
+
+```bash
+pytest -q
+```
