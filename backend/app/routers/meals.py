@@ -4,54 +4,50 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, HTTPException
 
-from app.meal_api import AltRequest, DayPlanOut, DayRequest, MealOut, MealSlot, generate_day, generate_meal
 from app.meal_store import PLANS_FILE, load_json, save_json
+from app.openai_service import generate_day, generate_meal
+from app.schemas.meals import DayPlan, GenerateDayRequest, SuggestAlternativeRequest, WeekResponse
 
 router = APIRouter(prefix="/api/meals")
 
 
-def _plans() -> dict[str, dict[str, object]]:
-    return load_json(PLANS_FILE, {})
-
-
-def _save_plans(plans: dict[str, dict[str, object]]) -> None:
-    save_json(PLANS_FILE, plans)
-
-
-@router.post("/generate-day", response_model=DayPlanOut)
-async def generate_day_route(body: DayRequest) -> DayPlanOut:
+@router.post("/generate-day", response_model=DayPlan)
+async def generate_day_route(body: GenerateDayRequest) -> DayPlan:
     plan = generate_day(body.date, body.preferences)
-    plans = _plans()
+    plans = load_json(PLANS_FILE, {})
     plans[body.date] = plan.model_dump()
-    _save_plans(plans)
+    save_json(PLANS_FILE, plans)
     return plan
 
 
-@router.post("/suggest-alternative")
-async def suggest_alternative_route(body: AltRequest) -> dict:
-    plans = _plans()
-    stored = plans.get(body.date)
-    if stored is None:
-        raise HTTPException(status_code=404, detail="No plan exists for that date")
-    current = DayPlanOut.model_validate(stored)
-    meal = generate_meal(body.date, body.slot, body.preferences)
-    updated = current.model_dump()
-    updated["meals"][body.slot] = meal.model_dump()
-    plans[body.date] = updated
-    _save_plans(plans)
-    return {"date": body.date, "slot": body.slot, "meal": meal.model_dump(), "meals": updated["meals"]}
+@router.post("/suggest-alternative", response_model=DayPlan)
+async def suggest_alternative_route(body: SuggestAlternativeRequest) -> DayPlan:
+    if body.currentPlan.date != body.date:
+        raise HTTPException(status_code=422, detail="currentPlan.date must match date")
+    updated_meals = []
+    replaced = False
+    for meal in body.currentPlan.meals:
+        if meal.slot == body.slot and not replaced:
+            updated_meals.append(generate_meal(body.date, body.slot, body.preferences))
+            replaced = True
+        else:
+            updated_meals.append(meal)
+    if not replaced:
+        raise HTTPException(status_code=422, detail="Requested slot not found in currentPlan")
+    updated = DayPlan(date=body.date, meals=updated_meals)
+    plans = load_json(PLANS_FILE, {})
+    plans[body.date] = updated.model_dump()
+    save_json(PLANS_FILE, plans)
+    return updated
 
 
-@router.get("/../week/{selected_date}")
-async def get_week(selected_date: str) -> dict:
-    plans = _plans()
-    base = datetime.fromisoformat(selected_date).date()
+@router.get("/week/{date}", response_model=WeekResponse)
+async def get_week(date: str) -> WeekResponse:
+    base = datetime.fromisoformat(date).date()
+    plans = load_json(PLANS_FILE, {})
     days = []
     for offset in range(7):
-        day = (base + timedelta(days=offset)).isoformat()
-        stored = plans.get(day)
-        meals = {slot: None for slot in ["breakfast", "lunch", "snack", "dinner"]}
-        if stored:
-            meals.update(stored.get("meals", {}))
-        days.append({"date": day, "meals": meals})
-    return {"selectedDate": selected_date, "days": days}
+        day_date = (base + timedelta(days=offset)).isoformat()
+        stored = plans.get(day_date)
+        days.append(DayPlan.model_validate(stored) if stored is not None else DayPlan(date=day_date, meals=[]))
+    return WeekResponse(selectedDate=date, days=days)

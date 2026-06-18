@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from uuid import uuid4
-
 from fastapi import APIRouter
 
 from app.meal_store import FAVORITES_FILE, load_json, save_json
-from app.schemas.meals import DeleteFavoriteRequest, FavoriteRequest
+from app.schemas.meals import FavoriteDeleteRequest, FavoriteUpsertRequest, FavoritesResponse
 
 router = APIRouter(prefix="/api/favorites")
 
@@ -14,22 +12,23 @@ def _favorites() -> list[dict]:
     return load_json(FAVORITES_FILE, [])
 
 
-@router.get("")
-async def get_favorites() -> dict:
-    return {"favorites": _favorites()}
+@router.get("", response_model=FavoritesResponse)
+async def get_favorites() -> FavoritesResponse:
+    return FavoritesResponse(favorites=_favorites())
 
 
-@router.post("")
-async def add_favorite(body: FavoriteRequest) -> dict:
-    fav = {"id": str(uuid4()), **body.meal.model_dump()}
+@router.post("", response_model=FavoritesResponse)
+async def add_favorite(body: FavoriteUpsertRequest) -> FavoritesResponse:
     favs = _favorites()
-    favs.append(fav)
-    save_json(FAVORITES_FILE, favs)
-    return {"favorite": fav}
+    meal = body.meal.model_dump()
+    if meal not in favs:
+        favs.append(meal)
+        save_json(FAVORITES_FILE, favs)
+    return FavoritesResponse(favorites=favs)
 
 
-@router.delete("")
-async def delete_favorite(body: DeleteFavoriteRequest) -> dict:
-    favs = [f for f in _favorites() if f.get("id") != body.id]
+@router.delete("", response_model=FavoritesResponse)
+async def delete_favorite(body: FavoriteDeleteRequest) -> FavoritesResponse:
+    favs = [meal for meal in _favorites() if not (meal.get('name') == body.mealName and meal.get('slot') == body.slot)]
     save_json(FAVORITES_FILE, favs)
-    return {"deleted": True, "id": body.id}
+    return FavoritesResponse(favorites=favs)
