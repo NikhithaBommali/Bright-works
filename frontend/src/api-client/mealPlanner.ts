@@ -1,16 +1,17 @@
 import { apiDelete, apiGet, apiPost, apiPut } from './base';
 import type {
   DayPlan,
+  Favorite,
   FavoritesResponse,
   GenerateDayRequest,
   Meal,
   MealSlot,
   Preferences,
   SuggestAlternativeRequest,
-  WeekPlanResponse,
+  WeekResponse,
 } from '../types/mealPlanner';
 
-export type { DayPlan, Meal, MealSlot, Preferences, WeekPlanResponse } from '../types/mealPlanner';
+export type { DayPlan, Favorite, Meal, MealSlot, Preferences, WeekResponse } from '../types/mealPlanner';
 
 export function fetchPreferences(): Promise<Preferences> {
   return apiGet<Preferences>('/api/preferences');
@@ -28,8 +29,8 @@ export function suggestAlternative(body: SuggestAlternativeRequest): Promise<Day
   return apiPost<DayPlan, SuggestAlternativeRequest>('/api/meals/suggest-alternative', body);
 }
 
-export function fetchWeekPlan(date: string): Promise<WeekPlanResponse> {
-  return apiGet<WeekPlanResponse>(`/api/week/${date}`);
+export function fetchWeekPlan(date: string): Promise<WeekResponse> {
+  return apiGet<WeekResponse>(`/api/meals/week/${date}`);
 }
 
 export function fetchFavorites(): Promise<FavoritesResponse> {

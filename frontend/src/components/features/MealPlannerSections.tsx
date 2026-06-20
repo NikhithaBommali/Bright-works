@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { CalendarDays, ChefHat, Clock3, Heart, Loader2, Save, Sparkles, Trash2, Users } from 'lucide-react';
-import type { Favorite, Meal, MealSlot, Preferences, WeekPlanResponse } from '../../api-client/mealPlanner';
+import type { Favorite, Meal, MealSlot, Preferences, WeekResponse } from '../../api-client/mealPlanner';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
@@ -138,7 +138,7 @@ export function PreferencesPanel({ preferences, saving, cuisineOptions, ageOptio
 }
 
 interface WeekStripProps {
-  weekPlan: WeekPlanResponse | null;
+  weekPlan: WeekResponse | null;
   selectedDate: string;
   loading: boolean;
   mealSlots: MealSlot[];
@@ -154,7 +154,7 @@ export function WeekStrip({ weekPlan, selectedDate, loading, mealSlots, formatDa
         {loading
           ? Array.from({ length: 7 }).map((_, index) => <Skeleton key={index} className="h-24" />)
           : weekPlan?.days.map((day) => {
-              const mealCount = mealSlots.filter((slot) => Boolean(day.meals[slot])).length;
+              const mealCount = mealSlots.filter((slot) => day.meals.some((meal) => meal.slot === slot)).length;
               const isSelected = day.date === selectedDate;
               return (
                 <Button

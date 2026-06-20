@@ -32,8 +32,12 @@ export type WeekPlanResponse = {
   days: WeekDay[];
 };
 
+export type Favorite = Meal & {
+  id: string;
+};
+
 export type FavoritesResponse = {
-  favorites: Meal[];
+  favorites: Favorite[];
 };
 
 export type GenerateDayRequest = {
@@ -47,3 +51,5 @@ export type SuggestAlternativeRequest = {
   preferences: Preferences;
   currentPlan: DayPlan;
 };
+
+export type WeekResponse = WeekPlanResponse;
