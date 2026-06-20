@@ -1,9 +1,10 @@
+from __future__ import annotations
+
 from app.routers.favorites import router as favorites_router
 from app.routers.meals import router as meals_router
 from app.routers.preferences import router as preferences_router
 
 __all__ = ['favorites_router', 'meals_router', 'preferences_router']
-from __future__ import annotations
 
 import functools
 import json

@@ -25,9 +25,7 @@ __all__ = [
     'MealSlot',
     'Preference',
     'Preferences',
+    'Preference',
     'SuggestAlternativeRequest',
     'WeekResponse',
 ]
-from app.schemas.expense import Category, ExpenseCreate, ExpenseOut, ExpenseRead
-
-__all__ = ["Category", "ExpenseCreate", "ExpenseOut", "ExpenseRead"]

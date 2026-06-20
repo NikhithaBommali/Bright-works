@@ -13,6 +13,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_credentials=False, allow_methods=['*'], allow_headers=['*'])
-app.include_router(preferences.router)
-app.include_router(meals.router)
-app.include_router(favorites.router)
+app.include_router(preferences)
+app.include_router(meals)
+app.include_router(favorites)

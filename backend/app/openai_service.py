@@ -19,11 +19,13 @@ MealSlot = Literal['Breakfast', 'Lunch', 'Snack', 'Dinner']
 
 @functools.lru_cache(maxsize=1)
 def _openai_client() -> OpenAI:
+    if OpenAI is None:
+        raise HTTPException(status_code=503, detail='OPENAI_API_KEY is not configured on the backend')
     return OpenAI(api_key=os.environ.get('OPENAI_API_KEY'))
 
 
 def _require_openai() -> None:
-    if not os.environ.get('OPENAI_API_KEY'):
+    if not os.environ.get('OPENAI_API_KEY') or OpenAI is None:
         raise HTTPException(status_code=503, detail='OPENAI_API_KEY is not configured on the backend')
 
 
