@@ -23,9 +23,7 @@ __all__ = [
     'GenerateDayResponse',
     'Meal',
     'MealSlot',
-    'Preference',
     'Preferences',
-    'Preference',
     'SuggestAlternativeRequest',
     'WeekResponse',
 ]

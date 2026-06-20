@@ -6,10 +6,12 @@ import os
 from typing import Literal
 
 from fastapi import HTTPException
+
 try:
     from openai import OpenAI
 except ModuleNotFoundError:  # pragma: no cover - import fallback for preview boot
     OpenAI = None  # type: ignore[assignment]
+
 from pydantic import ValidationError
 
 from app.schemas.meals import DayPlan, Meal, Preferences
