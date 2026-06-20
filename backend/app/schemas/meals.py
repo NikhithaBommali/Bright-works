@@ -30,6 +30,11 @@ class GenerateDayRequest(BaseModel):
     preferences: Preferences
 
 
+class GenerateDayResponse(BaseModel):
+    date: str
+    meals: list[Meal]
+
+
 class DayPlan(BaseModel):
     date: str
     meals: list[Meal]
