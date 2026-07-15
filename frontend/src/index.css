@@ -24,7 +24,7 @@
     --input: 214.3 24% 93%;
     --ring: 165.3 100% 39.2%;
     --radius: 0.625rem;
-    --gradient-start: #1CC9A8;
+    --gradient-start: #1cc9a8;
     --gradient-end: #06b6d4;
     --brand-teal: 165.3 100% 39.2%;
     --surface-primary: 0 0% 100%;
@@ -36,6 +36,7 @@
     --sidebar-hover: 210 40% 96%;
     --divider: 214.3 24% 93%;
   }
+
   .dark {
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
@@ -66,19 +67,55 @@
     --sidebar-hover: 217.2 32.6% 17.5%;
     --divider: 217.2 32.6% 17.5%;
   }
-  * { @apply border-border; }
-  html { color-scheme: dark; }
-  html:not(.dark) { color-scheme: light; }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    color-scheme: light;
+  }
+
   body {
     @apply min-h-screen bg-background text-foreground antialiased;
     background-image:
       radial-gradient(circle at top, hsl(var(--primary) / 0.15), transparent 30%),
       radial-gradient(circle at right, hsl(var(--accent) / 0.12), transparent 28%);
   }
-  #root { @apply min-h-screen; }
+
+  #root {
+    @apply min-h-screen;
+  }
 }
 
 @layer components {
-  .glass-panel { @apply bg-card/80 backdrop-blur-xl border border-border/80 shadow-soft; }
-  .text-gradient { @apply bg-gradient-primary bg-clip-text text-transparent; }
+  .glass-panel {
+    @apply bg-card/80 backdrop-blur-xl border border-border/80 shadow-soft;
+  }
+
+  .text-gradient {
+    @apply bg-gradient-primary bg-clip-text text-transparent;
+  }
+}
+
+  body {
+    @apply min-h-screen bg-background text-foreground antialiased;
+    background-image:
+      radial-gradient(circle at top, hsl(var(--primary) / 0.15), transparent 30%),
+      radial-gradient(circle at right, hsl(var(--accent) / 0.12), transparent 28%);
+  }
+
+  #root {
+    @apply min-h-screen;
+  }
+}
+
+@layer components {
+  .glass-panel {
+    @apply bg-card/80 backdrop-blur-xl border border-border/80 shadow-soft;
+  }
+
+  .text-gradient {
+    @apply bg-gradient-primary bg-clip-text text-transparent;
+  }
 }
