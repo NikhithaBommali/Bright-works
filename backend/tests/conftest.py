@@ -9,14 +9,14 @@ from sqlalchemy.orm import sessionmaker
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.database import Base, get_db  # noqa: E402
+from app.models.todo import Todo  # noqa: E402
 from main import app  # noqa: E402
 
 
 @pytest.fixture()
 def db_session(monkeypatch):
-    engine = create_engine("sqlite:///./test.db", connect_args={"check_same_thread": False})
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
 
     def override_get_db():
@@ -32,7 +32,6 @@ def db_session(monkeypatch):
         yield TestingSessionLocal()
     finally:
         app.dependency_overrides.clear()
-        Base.metadata.drop_all(bind=engine)
 
 
 @pytest.fixture()
