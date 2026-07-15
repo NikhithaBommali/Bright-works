@@ -68,10 +68,12 @@ class FavoriteDelete(BaseModel):
     id: str
 
 
-DEFAULT_PREFERENCES = Preferences(
+DefaultPreferences = Preferences(
     number_of_kids=1,
     age_range="4-6 years",
     dietary_restriction="None",
     foods_to_avoid="",
     cuisine_preferences=[],
 )
+
+DEFAULT_PREFERENCES = DefaultPreferences

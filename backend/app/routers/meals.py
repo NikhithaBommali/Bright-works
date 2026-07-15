@@ -13,7 +13,7 @@ from openai import OpenAI
 
 from app.schemas.meal_planner import (
     DailyPlan,
-    DEFAULT_PREFERENCES,
+    DefaultPreferences,
     FavoriteCreate,
     FavoriteDelete,
     FavoriteOut,
@@ -96,7 +96,7 @@ def _generate_plan(date_value: date, preferences: Preferences, slot: str | None 
 
 def _load_preferences() -> Preferences:
     stored = _read_json(PREFERENCES_FILE, None)
-    return DEFAULT_PREFERENCES if stored is None else Preferences.model_validate(stored)
+    return DefaultPreferences if stored is None else Preferences.model_validate(stored)
 
 
 def _save_preferences(preferences: Preferences) -> None:
