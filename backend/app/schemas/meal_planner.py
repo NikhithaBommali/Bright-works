@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class Preferences(BaseModel):
@@ -34,10 +34,28 @@ class GenerateDayRequest(BaseModel):
     preferences: Preferences
 
 
+class GenerateDayWithOpenAIRequest(GenerateDayRequest):
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_payload(cls, data: object) -> object:
+        if isinstance(data, dict) and "preferences" not in data and all(key in data for key in ("number_of_kids", "age_range", "dietary_restriction", "foods_to_avoid", "cuisine_preferences")):
+            return {"date": data.get("date"), "preferences": data}
+        return data
+
+
 class SuggestAlternativeRequest(BaseModel):
     date: date
     slot: Literal["breakfast", "lunch", "snack", "dinner"]
     preferences: Preferences
+
+
+class SuggestAlternativeWithOpenAIRequest(SuggestAlternativeRequest):
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_payload(cls, data: object) -> object:
+        if isinstance(data, dict) and "preferences" not in data and all(key in data for key in ("number_of_kids", "age_range", "dietary_restriction", "foods_to_avoid", "cuisine_preferences")):
+            return {"date": data.get("date"), "slot": data.get("slot"), "preferences": data}
+        return data
 
 
 class GenerateDayResponse(BaseModel):
@@ -45,9 +63,8 @@ class GenerateDayResponse(BaseModel):
     meals: DailyPlan
 
 
-class MealPlannerResponse(BaseModel):
-    date: date
-    meals: DailyPlan
+class SuggestAlternativeResponse(GenerateDayResponse):
+    pass
 
 
 class WeekDayResponse(BaseModel):

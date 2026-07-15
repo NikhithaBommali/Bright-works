@@ -43,7 +43,7 @@ async def create_todo(body: TodoCreate, db: Session = Depends(get_db)) -> Todo:
 
 
 @router.patch("/{todo_id}", response_model=TodoOut)
-async def update_todo(todo_id: int = Path(ge=1), body: TodoUpdate | None = None, db: Session = Depends(get_db)) -> Todo:
+async def update_todo(body: TodoUpdate, todo_id: int = Path(ge=1), db: Session = Depends(get_db)) -> Todo:
     todo = db.get(Todo, todo_id)
     if todo is None:
         raise HTTPException(status_code=404, detail={"error": "todo_not_found", "message": "Todo not found"})

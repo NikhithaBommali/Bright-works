@@ -9,9 +9,10 @@ from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException
+from fastapi.encoders import jsonable_encoder
 try:
     from openai import OpenAI
-except ModuleNotFoundError:
+except ModuleNotFoundError:  # pragma: no cover - import compatibility in test env
     OpenAI = None  # type: ignore[assignment]
 
 from app.schemas.meal_planner import (
@@ -21,11 +22,13 @@ from app.schemas.meal_planner import (
     FavoriteDelete,
     FavoriteOut,
     GenerateDayRequest,
+    GenerateDayWithOpenAIRequest,
     GenerateDayResponse,
+    SuggestAlternativeResponse,
     Meal,
-    MealPlannerResponse,
     Preferences,
     SuggestAlternativeRequest,
+    SuggestAlternativeWithOpenAIRequest,
     WeekDayResponse,
     WeekResponse,
 )
@@ -40,11 +43,11 @@ FAVORITES_FILE = DATA_DIR / "favorites.json"
 
 @functools.lru_cache(maxsize=1)
 def _openai_client() -> OpenAI:
-    if OpenAI is None:
-        raise HTTPException(status_code=503, detail="openai package is not installed")
     key = os.environ.get("OPENAI_API_KEY")
     if not key:
         raise HTTPException(status_code=503, detail="OPENAI_API_KEY is not configured")
+    if OpenAI is None:
+        raise HTTPException(status_code=503, detail="openai package is not installed")
     return OpenAI(api_key=key)
 
 
@@ -137,7 +140,7 @@ async def put_preferences(body: Preferences) -> Preferences:
 
 
 @router.post("/meals/generate-day", response_model=GenerateDayResponse)
-async def generate_day(body: GenerateDayRequest) -> GenerateDayResponse:
+async def generate_day(body: GenerateDayWithOpenAIRequest | GenerateDayRequest) -> GenerateDayResponse:
     if not os.environ.get("OPENAI_API_KEY"):
         raise HTTPException(status_code=503, detail="OPENAI_API_KEY is not configured")
     plan = _generate_plan(body.date, body.preferences)
@@ -148,7 +151,7 @@ async def generate_day(body: GenerateDayRequest) -> GenerateDayResponse:
 
 
 @router.post("/meals/suggest-alternative", response_model=GenerateDayResponse)
-async def suggest_alternative(body: SuggestAlternativeRequest) -> GenerateDayResponse:
+async def suggest_alternative(body: SuggestAlternativeWithOpenAIRequest | SuggestAlternativeRequest) -> GenerateDayResponse:
     if not os.environ.get("OPENAI_API_KEY"):
         raise HTTPException(status_code=503, detail="OPENAI_API_KEY is not configured")
     plans = _load_plans()
@@ -161,7 +164,7 @@ async def suggest_alternative(body: SuggestAlternativeRequest) -> GenerateDayRes
     updated[body.slot] = regenerated.model_dump()[body.slot]
     plans[body.date.isoformat()] = updated
     _save_plans(plans)
-    return MealPlannerResponse(date=body.date, meals=DailyPlan.model_validate(updated))
+    return SuggestAlternativeResponse(date=body.date, meals=DailyPlan.model_validate(updated))
 
 
 @router.get("/week/{date_value}", response_model=WeekResponse)

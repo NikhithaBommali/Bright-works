@@ -12,6 +12,8 @@ class TodoCreate(BaseModel):
 class TodoUpdate(BaseModel):
     completed: bool
 
+    model_config = {"strict": True}
+
 
 class TodoOut(BaseModel):
     id: int
