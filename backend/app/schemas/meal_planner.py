@@ -45,6 +45,11 @@ class GenerateDayResponse(BaseModel):
     meals: DailyPlan
 
 
+class MealPlannerResponse(BaseModel):
+    date: date
+    meals: DailyPlan
+
+
 class WeekDayResponse(BaseModel):
     date: date
     meals: DailyPlan | None
@@ -68,12 +73,10 @@ class FavoriteDelete(BaseModel):
     id: str
 
 
-DefaultPreferences = Preferences(
+DEFAULT_PREFERENCES = Preferences(
     number_of_kids=1,
     age_range="4-6 years",
     dietary_restriction="None",
     foods_to_avoid="",
     cuisine_preferences=[],
 )
-
-DEFAULT_PREFERENCES = DefaultPreferences

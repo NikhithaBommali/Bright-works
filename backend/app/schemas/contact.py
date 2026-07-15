@@ -1,4 +1,9 @@
-from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
+
+try:
+    from pydantic import EmailStr
+except ImportError:
+    EmailStr = str  # type: ignore[assignment]
 
 
 class ContactBase(BaseModel):

@@ -9,17 +9,21 @@ from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException
-from openai import OpenAI
+try:
+    from openai import OpenAI
+except ModuleNotFoundError:
+    OpenAI = None  # type: ignore[assignment]
 
 from app.schemas.meal_planner import (
     DailyPlan,
-    DefaultPreferences,
+    DEFAULT_PREFERENCES,
     FavoriteCreate,
     FavoriteDelete,
     FavoriteOut,
     GenerateDayRequest,
     GenerateDayResponse,
     Meal,
+    MealPlannerResponse,
     Preferences,
     SuggestAlternativeRequest,
     WeekDayResponse,
@@ -36,6 +40,8 @@ FAVORITES_FILE = DATA_DIR / "favorites.json"
 
 @functools.lru_cache(maxsize=1)
 def _openai_client() -> OpenAI:
+    if OpenAI is None:
+        raise HTTPException(status_code=503, detail="openai package is not installed")
     key = os.environ.get("OPENAI_API_KEY")
     if not key:
         raise HTTPException(status_code=503, detail="OPENAI_API_KEY is not configured")
@@ -96,7 +102,7 @@ def _generate_plan(date_value: date, preferences: Preferences, slot: str | None 
 
 def _load_preferences() -> Preferences:
     stored = _read_json(PREFERENCES_FILE, None)
-    return DefaultPreferences if stored is None else Preferences.model_validate(stored)
+    return DEFAULT_PREFERENCES if stored is None else Preferences.model_validate(stored)
 
 
 def _save_preferences(preferences: Preferences) -> None:
@@ -155,7 +161,7 @@ async def suggest_alternative(body: SuggestAlternativeRequest) -> GenerateDayRes
     updated[body.slot] = regenerated.model_dump()[body.slot]
     plans[body.date.isoformat()] = updated
     _save_plans(plans)
-    return GenerateDayResponse(date=body.date, meals=DailyPlan.model_validate(updated))
+    return MealPlannerResponse(date=body.date, meals=DailyPlan.model_validate(updated))
 
 
 @router.get("/week/{date_value}", response_model=WeekResponse)

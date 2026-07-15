@@ -12,14 +12,23 @@ sys.path.insert(0, _root)
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
 
 from app.database import Base, get_db  # noqa: E402
-from app.models.contact import Contact  # noqa: E402
-from app.models.meal_planner import AppState  # noqa: E402
-from app.models.todo import Todo  # noqa: E402
 from main import app  # noqa: E402
 
 
 @pytest.fixture()
 def db_session():
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    Base.metadata.create_all(bind=engine)
+    db = TestingSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+@pytest.fixture()
+def client():
     engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     Base.metadata.create_all(bind=engine)
@@ -33,13 +42,6 @@ def db_session():
             db.close()
 
     app.dependency_overrides[get_db] = override_get_db
-    try:
-        yield TestingSessionLocal()
-    finally:
-        app.dependency_overrides.clear()
-
-
-@pytest.fixture()
-def client(db_session):
     with TestClient(app) as test_client:
         yield test_client
+    app.dependency_overrides.clear()
