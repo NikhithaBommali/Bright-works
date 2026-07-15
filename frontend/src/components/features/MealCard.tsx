@@ -38,7 +38,7 @@ export function MealCard({
 
   return (
     <Card className="overflow-hidden rounded-3xl">
-      <div className="grid gap-0 md:grid-cols-[220px_minmax(0,1fr)]">
+      <article className="grid gap-0 md:grid-cols-[220px_minmax(0,1fr)]">
         <img src={imageUrl} alt={meal.name} className="h-48 w-full object-cover md:h-full" />
         <div className="space-y-4 p-5 sm:p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -102,7 +102,7 @@ export function MealCard({
             {isSuggesting ? 'Refreshing this slot...' : 'Suggest alternative'}
           </Button>
         </div>
-      </div>
+      </article>
     </Card>
   );
 }

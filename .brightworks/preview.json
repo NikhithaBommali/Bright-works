@@ -1,0 +1,7 @@
+{
+  "app": "frontend",
+  "type": "full-stack",
+  "framework": "react-vite",
+  "preview_url": "/",
+  "api_base_url": "/api"
+}
