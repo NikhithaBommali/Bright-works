@@ -1,9 +1,9 @@
 # Bright-works (Rolodex)
 
-This repository is a strict monorepo for a fullstack Rolodex contact book:
+This repository is a strict monorepo for a fullstack Rolodex contact book plus a small React/Vite + FastAPI todo backend used for CRUD testing.
 
 - `frontend/` — React + Vite (TypeScript)
-- `backend/` — FastAPI (Python) + SQLite
+- `backend/` — FastAPI (Python)
 
 ## Repo layout
 
@@ -24,6 +24,13 @@ This monorepo includes the kids daily meal planner app (React frontend + FastAPI
 
 The frontend calls backend endpoints using relative `/api/*` requests (see `frontend/src/api-client/*`).
 
+The backend also exposes a todo CRUD API (`/api/todos`) backed by `DATABASE_URL`.
+
+## Root env vars
+
+- Backend required: `DATABASE_URL`
+- Frontend optional: `VITE_API_BASE_URL`
+
 ### 1) Backend (FastAPI)
 
 #### Install
@@ -36,9 +43,21 @@ source .venv/bin/activate  # macOS/Linux
 pip install -r requirements.txt
 ```
 
-#### Configure SQLite
+#### Configure `DATABASE_URL`
 
-The backend uses `DATABASE_URL` (default: `sqlite:///./rolodex.db`).
+The backend uses `DATABASE_URL` (see `backend/.env.example`).
+
+For example:
+
+```bash
+DATABASE_URL=postgresql://localhost/brightworks
+```
+
+For local SQLite-based development (as in the existing example):
+
+```bash
+DATABASE_URL=sqlite:///./rolodex.db
+```
 
 It also requires `OPENAI_API_KEY` to generate meal plans (no canned fallback). See `backend/.env.example` below.
 
@@ -47,6 +66,8 @@ It also requires `OPENAI_API_KEY` to generate meal plans (no canned fallback). S
 DATABASE_URL=sqlite:///./rolodex.db
 OPENAI_API_KEY=your-key-here
 ```
+
+> For the todo CRUD API, the backend persists data using `DATABASE_URL`.
 
 Notes on SQLite persistence:
 - The database file is created/used at the path implied by `DATABASE_URL` (by default `backend/rolodex.db`).
@@ -478,6 +499,28 @@ No response body.
 
 **Errors**
 - `404 Not Found` — contact id does not exist
+
+## Quality checks (CI)
+
+### Quality commands
+
+**Backend**
+- Lint: `flake8` (configured by `backend/pyproject.toml`)
+- Tests: `pytest` (from `backend/`)
+
+**Frontend**
+- Lint: `npm run lint` (from `frontend/`)
+- Tests: `npm test` (from `frontend/`)
+
+### GitHub Actions workflow
+
+This repo is expected to have a workflow at:
+
+- `.github/workflows/ci.yml`
+
+That workflow should run lint + tests on every `push` and `pull_request`.
+
+**Contributor expectation:** CI must pass for both lint and tests before merging.
 
 ## Kids daily meal planner UI flows
 
